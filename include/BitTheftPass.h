@@ -7,7 +7,7 @@ namespace llvm {
 
 class BitTheftPass : public PassInfoMixin<BitTheftPass> {
   public:
-    PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM);
+    PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
 };
 
 } // end namespace llvm

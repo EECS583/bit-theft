@@ -12,11 +12,11 @@ llvmGetPassPluginInfo() {
             .PluginVersion = "v0.1",
             .RegisterPassBuilderCallbacks = [](PassBuilder &PB) {
                 PB.registerPipelineParsingCallback(
-                    [](StringRef name, FunctionPassManager &FPM,
+                    [](StringRef name, ModulePassManager &MPM,
                        [[maybe_unused]] ArrayRef<PassBuilder::PipelineElement>
                            elements) {
                         if (name == "bit-theft") {
-                            FPM.addPass(BitTheftPass());
+                            MPM.addPass(BitTheftPass());
                             return true;
                         }
                         return false;

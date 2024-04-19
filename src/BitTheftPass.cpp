@@ -4,10 +4,13 @@
 
 namespace llvm {
 
-PreservedAnalyses BitTheftPass::run(Function &F, FunctionAnalysisManager &AM) {
-    errs() << F.getName() << '\n';
-    for (const auto &argument : F.args()) {
-        errs() << argument << '\n';
+PreservedAnalyses BitTheftPass::run(Module &M, ModuleAnalysisManager &AM) {
+    errs() << "Module Pass: " << M.getName() << '\n';
+    for (auto &function : M.functions()) {
+        if (function.getName().startswith("llvm.")) {
+            continue;
+        }
+        errs() << function.getName() << '\n';
     }
     return PreservedAnalyses::all();
 }

@@ -19,6 +19,7 @@ count_rising_edge(const List *list, uint64_t rising_edges, bool last_value) {
     }
 }
 
+int main(int argc, char *argv[]);
 int main(int argc, char *argv[]) {
     List first = {.value = true, .next = NULL};
     List second = {.value = false, .next = NULL};
