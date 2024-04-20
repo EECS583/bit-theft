@@ -7,6 +7,12 @@
 #include <unordered_map>
 #include <vector>
 
+using Element = struct {
+  uint64_t size, original_ind;
+};
+using NewArg = std::vector<Element>;
+using Matching = std::vector<NewArg>;
+
 namespace llvm {
 
 class BitTheftPass : public PassInfoMixin<BitTheftPass> {
@@ -16,9 +22,10 @@ class BitTheftPass : public PassInfoMixin<BitTheftPass> {
     std::unordered_map<Argument *, uint64_t>
     getBitTheftCandidatePtr(Function &F);
     uint64_t getMinSpareBitsInPtr(Function &F, Argument *arg);
-    std::unordered_map<Argument *, std::vector<Argument *>> matching(
+    Matching matching(
       std::unordered_map<Argument *, uint64_t> ptrCandidates,
       std::vector<Argument *> intCandidates);
+    void embedAtCaller(CallInst * callInst, Function* caller, Function * callee, Matching matches, std::vector<Argument *> others);
 };
 
 } // end namespace llvm
