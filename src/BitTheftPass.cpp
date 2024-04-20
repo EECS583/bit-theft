@@ -66,7 +66,8 @@ PreservedAnalyses BitTheftPass::run(Module &M, ModuleAnalysisManager &AM) {
         if (function.getName().startswith("llvm.")) {
             continue;
         }
-        errs() << function.getName() << '\n';
+        errs() << function.getName() << ": "
+               << Function::isInternalLinkage(function.getLinkage()) << '\n';
     }
     return PreservedAnalyses::all();
 }
