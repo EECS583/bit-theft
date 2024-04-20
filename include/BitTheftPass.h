@@ -11,7 +11,7 @@ namespace llvm {
 class BitTheftPass : public PassInfoMixin<BitTheftPass> {
   public:
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
-    std::vector<Argument *> getBitTheftCandidateI1(Function &F);
+    std::vector<Argument *> getBitTheftCandidate(Function &F);
     std::unordered_map<Argument *, uint64_t>
     getBitTheftCandidatePtr(Function &F);
     uint64_t getMinSpareBitsInPtr(Function &F, Argument *arg);

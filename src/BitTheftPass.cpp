@@ -6,11 +6,13 @@
 
 namespace llvm {
 
-std::vector<Argument *> BitTheftPass::getBitTheftCandidateI1(Function &F) {
+std::vector<Argument *> BitTheftPass::getBitTheftCandidate(Function &F) {
     std::vector<Argument *> candidates;
     for (auto &arg : F.args()) {
-        if (arg.getType()->isIntegerTy(1)) {
-            candidates.push_back(&arg);
+        if (auto *intType = dyn_cast<IntegerType>(arg.getType())) {
+            if (intType->getBitWidth() % 8 != 0) {
+                candidates.push_back(&arg);
+            }
         }
     }
     return candidates;
