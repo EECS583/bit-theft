@@ -1,6 +1,7 @@
 #include "BitTheftPass.h"
 #include <llvm/IR/Instructions.h>
 #include <llvm/Support/raw_ostream.h>
+#include <unordered_map>
 
 #define DEBUG_TYPE "bit-theft"
 
@@ -62,6 +63,20 @@ uint64_t BitTheftPass::getMinSpareBitsInPtr(Function &F, Argument *arg) {
     return Log2_64(minAlignment);
 }
 
+std::unordered_map<Argument *, std::vector<Argument *>> BitTheftPass::matching(
+    std::unordered_map<Argument *, uint64_t> ptrCandidates,
+    std::vector<Argument *> intCandidates) {
+        std::unordered_map<Argument *, std::vector<Argument *>> matches;
+        for (auto &intArg : intCandidates) {
+            for (auto &ptrArg : ptrCandidates) {
+                if (ptrArg.second >= intArg->getType()->getIntegerBitWidth()) {
+                    matches[ptrArg.first].push_back(intArg);
+                    ptrArg.second -= intArg->getType()->getIntegerBitWidth();
+                }
+            }
+        }
+        return matches;
+}
 PreservedAnalyses BitTheftPass::run(Module &M, ModuleAnalysisManager &AM) {
     errs() << "Module Pass: " << M.getName() << '\n';
     for (auto &function : M.functions()) {

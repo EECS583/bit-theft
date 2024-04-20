@@ -1,6 +1,7 @@
 #ifndef LLVM_TRANSFORMS_SCALAR_BIT_THEFT_H
 #define LLVM_TRANSFORMS_SCALAR_BIT_THEFT_H
 
+#include <llvm/IR/Argument.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/PassManager.h>
 #include <unordered_map>
@@ -15,6 +16,9 @@ class BitTheftPass : public PassInfoMixin<BitTheftPass> {
     std::unordered_map<Argument *, uint64_t>
     getBitTheftCandidatePtr(Function &F);
     uint64_t getMinSpareBitsInPtr(Function &F, Argument *arg);
+    std::unordered_map<Argument *, std::vector<Argument *>> matching(
+      std::unordered_map<Argument *, uint64_t> ptrCandidates,
+      std::vector<Argument *> intCandidates);
 };
 
 } // end namespace llvm
