@@ -98,13 +98,13 @@ Matching BitTheftPass::matching(
             matches.push_back(newArg);
         }
 
-        for (auto &intCandidate : intCandidates) {
-            if (!visited[intCandidate->getArgNo()]) {
-                NewArg newArg;
-                newArg.emplace_back(intCandidate->getType()->getIntegerBitWidth(), intCandidate->getArgNo());
-                matches.push_back(newArg);
-            }
-        }
+        // for (auto &intCandidate : intCandidates) {
+        //     if (!visited[intCandidate->getArgNo()]) {
+        //         NewArg newArg;
+        //         newArg.emplace_back(intCandidate->getType()->getIntegerBitWidth(), intCandidate->getArgNo());
+        //         matches.push_back(newArg);
+        //     }
+        // }
 
         return matches;
 }
@@ -127,26 +127,39 @@ std::vector<Argument *> BitTheftPass::getOthers(Function &F, Matching matches) {
 }
 
 void BitTheftPass::embedAtCaller(CallInst * callInst, Function* caller, Function * callee, Matching matches, std::vector<Argument *> others) {
-    std::vector<Value *> embeddedArgs;
+    std::vector<Value *> embeddedArgs(matches.size());
 
     for (size_t i = 0; i < matches.size(); i++) {
         auto &match = matches[i];
         uint64_t ptrArgNo = match[0].original_ind;
         uint64_t availableLSB = 0;
-        embeddedArgs[i] = callInst->getArgOperand(ptrArgNo);
+        // errs() << "ptrArgNo: " << ptrArgNo << '\n';
+        // errs() << "CallInst: " << *callInst << '\n';
+        errs() << "Matches Size: " << matches.size() << '\n';
+        // errs() << "Match Size: " << match.size() << '\n';
+        // embeddedArgs[i] = callInst->getArgOperand(ptrArgNo);
+        embeddedArgs[i] = new PtrToIntInst(callInst->getArgOperand(ptrArgNo), Type::getInt64Ty(caller->getContext()), "transform_ptr", callInst);
+        // embeddedArgs[i] = new ZExtInst(embeddedArgs[i], Type::getInt64Ty(caller->getContext()), "zext_ptr", callInst);
+        // errs() << "embeddedArgs[i]: " << *embeddedArgs[i] << '\n';
         for (size_t j = 1; j < match.size(); j++) {
             uint64_t intArgNo = match[j].original_ind;
             uint64_t intArgBits = match[j].size;
-            BinaryOperator *shl = BinaryOperator::Create(Instruction::Shl, callInst->getArgOperand(intArgNo), ConstantInt::get(Type::getInt16Ty(caller->getContext()), availableLSB), "shl", callInst);
+            // errs() << "intArgNo: " << *callInst->getArgOperand(intArgNo) << '\n';
+            ZExtInst *ext = new ZExtInst(callInst->getArgOperand(intArgNo), Type::getInt64Ty(caller->getContext()), "zext_type", callInst);
+            BinaryOperator *shl = BinaryOperator::Create(Instruction::Shl, ext, ConstantInt::get(Type::getInt64Ty(caller->getContext()), availableLSB), "shl", callInst);
             BinaryOperator *orInst = BinaryOperator::Create(Instruction::Or, embeddedArgs[i], shl, "or", callInst);
+            errs() << "intArgNo: " << intArgNo << '\n';
             availableLSB += intArgBits;
             embeddedArgs[i] = orInst;
         }
+        // errs() << "embeddedArgs[i]: " << *embeddedArgs[i] << '\n';
     }
+    errs() << "others size: " << others.size() << '\n';
     for (auto &other : others) {
-        embeddedArgs.push_back(other);
+        errs() << "other: " << *other << '\n';
+        embeddedArgs.push_back(callInst->getArgOperand(other->getArgNo()));
     }
-    CallInst *newCallInst = CallInst::Create(callee, embeddedArgs, "");
+    CallInst *newCallInst = CallInst::Create(callee, embeddedArgs, "", callInst);
     callInst->replaceAllUsesWith(newCallInst);
     callInst->eraseFromParent();
 }
@@ -174,10 +187,11 @@ Function * BitTheftPass::getEmbeddedFunc(Function &F, FunctionType *FTy, StringR
     for (size_t i = 0; i < matches.size(); i++) {
         auto &match = matches[i];
         uint64_t ptrArgNo = match[0].original_ind;
-        args[ptrArgNo] = builder.CreateTrunc(newFunc->arg_begin() + i, F.getArg(ptrArgNo)->getType());
+        // args[ptrArgNo] = builder.CreateTrunc(newFunc->arg_begin() + i, F.getArg(ptrArgNo)->getType());
         size_t alignment = (1 << (match[0].size)) - 1;
         size_t mask = alignment << (64 - match[0].size);
-        args[ptrArgNo] = builder.CreateAnd(args[ptrArgNo], ConstantInt::get(Type::getInt64Ty(F.getContext()), mask));
+        args[ptrArgNo] = builder.CreateAnd(newFunc->arg_begin() + i, ConstantInt::get(Type::getInt64Ty(F.getContext()), mask));
+        args[ptrArgNo] = builder.CreateIntToPtr(args[ptrArgNo], F.getArg(ptrArgNo)->getType());
         Value * var = newFunc->arg_begin() + i;
         for (size_t j = 1; j < match.size(); j++) {
             uint64_t intArgNo = match[j].original_ind;
@@ -198,9 +212,16 @@ PreservedAnalyses BitTheftPass::run(Module &M, ModuleAnalysisManager &AM) {
         if (function.isIntrinsic() || function.isDeclaration()) {
             continue;
         }
+        if (!function.hasInternalLinkage()) {
+            continue;
+        }
+        errs() << "====================\n" << function.getName() << '\n';
         std::vector<Argument *> intCandidates = getBitTheftCandidate(function);
         std::unordered_map<Argument *, uint64_t> ptrCandidates = getBitTheftCandidatePtr(function);
         Matching matches = matching(ptrCandidates, intCandidates);
+        if (matches.empty()) {
+            continue;
+        }
         std::vector<Argument *> others = getOthers(function, matches);
         Function * newFunc = getEmbeddedFunc(function, getEmbeddedFuncTy(function, matches, others, function.getContext()), function.getName().str() + "_embedded", matches, others);
         for (const auto &user : function.users()) {
