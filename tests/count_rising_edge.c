@@ -19,10 +19,10 @@ static List *generate_random_list(size_t n) {
     return node;
 }
 
-static void free_random_list(List *list) {
+static void free_list(List *list) {
     if (list == NULL)
         return;
-    free_random_list(list->next);
+    free_list(list->next);
     free(list);
 }
 
@@ -51,6 +51,6 @@ int main() {
     List *list = generate_random_list((size_t)(n < 0 ? -n : n));
     printf("Rising edges in random list: %ld\n",
            count_rising_edge(list, 0, true));
-    free_random_list(list);
+    free_list(list);
     return 0;
 }

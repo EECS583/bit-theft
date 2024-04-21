@@ -2,6 +2,7 @@
 
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/Passes/PassPlugin.h>
+#include <llvm/Transforms/Scalar/SimplifyCFG.h>
 
 using namespace llvm;
 
@@ -16,8 +17,9 @@ llvmGetPassPluginInfo() {
                        [[maybe_unused]] ArrayRef<PassBuilder::PipelineElement>
                            elements) {
                         if (name == "bit-theft") {
+                            MPM.addPass(createModuleToFunctionPassAdaptor(
+                                SimplifyCFGPass()));
                             MPM.addPass(BitTheftPass());
-                            MPM.addPass(ModuleInlinerWrapperPass());
                             return true;
                         }
                         return false;

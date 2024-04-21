@@ -2,25 +2,30 @@ CC := clang
 CXX := clang++
 OPT := opt
 DIS := llvm-dis
+CMAKE := cmake
 
-PLUGIN = "build/PassPlugin.so"
+PLUGIN = build/PassPlugin.so
+TESTS = $(wildcard tests/*.c)
 
-build:
-	$(MAKE) -C build
+.PHONY: $(PLUGIN)
+$(PLUGIN):
+	$(CMAKE) --build build
 
-test: tests/count_rising_edge.steal.ll
-
-tests/%.ll: tests/%.c
+$(TESTS:%.c=%.ll): tests/%.ll: tests/%.c
 	$(CC) -emit-llvm -S $< -O1 -o $@
 
-tests/%.bin: tests/%.ll
+$(TESTS:%.c=%): tests/%: tests/%.ll
 	$(CC) $< -o $@
 
-tests/%.steal.bc: tests/%.ll
+$(TESTS:%.c=%.bit_theft.bc): tests/%.bit_theft.bc: tests/%.ll $(PLUGIN)
 	$(OPT) -load-pass-plugin="${PLUGIN}" -passes='bit-theft' $< -o $@
 
-tests/%.steal.ll: tests/%.steal.bc
+$(TESTS:%.c=%.bit_theft): tests/%.bit_theft: tests/%.bit_theft.bc
+	$(CC) $< -o $@
+
+$(TESTS:%.c=%.bit_theft.ll): tests/%.bit_theft.ll: tests/%.bit_theft.bc
 	$(DIS) $< -o $@
 
+.PHONY: clean
 clean:
-	rm -f tests/*.bc tests/*.ll
+	rm -f tests/*.bc tests/*.ll tests/*.bit_theft $(TESTS:%.c=%)
