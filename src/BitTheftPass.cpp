@@ -35,7 +35,6 @@ bool BitTheftPass::isCandidateCalleeFunction(const Function &F) {
            std::all_of(F.users().begin(), F.users().end(), [](const User *U) {
                return dyn_cast<CallInst>(U) != nullptr;
            });
-    ;
 }
 
 std::optional<Align> BitTheftPass::getPointerAlign(const Value &V) {
