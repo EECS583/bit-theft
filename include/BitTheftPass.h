@@ -7,14 +7,6 @@
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/PassManager.h>
 #include <optional>
-#include <unordered_map>
-#include <vector>
-
-using Element = struct {
-    uint64_t size, original_ind;
-};
-using NewArg = std::vector<Element>;
-using Matching = std::vector<NewArg>;
 
 namespace llvm {
 
