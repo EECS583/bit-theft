@@ -11,6 +11,7 @@
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Operator.h>
 #include <llvm/IR/Value.h>
+#include <llvm/Support/MathExtras.h>
 #include <llvm/Support/raw_ostream.h>
 #include <unordered_map>
 #include <vector>
@@ -46,36 +47,44 @@ BitTheftPass::getBitTheftCandidatePtr(Function &F) {
 }
 
 uint64_t BitTheftPass::getMinSpareBitsInPtr(Function &F, Argument *arg) {
-    size_t minAlignment = std::numeric_limits<size_t>::max();
-    for (auto &block : F) {
-        for (auto &inst : block) {
-            // If the instruction is a load instruction
-            // and the pointer operand is the argument
-            // we are interested in, we can check the
-            // alignment of the load instruction.
-            if (auto *loadInst = dyn_cast<LoadInst>(&inst)) {
-                if (loadInst->getPointerOperand() == arg) {
-                    Align alignment = loadInst->getAlign();
-                    if (alignment < minAlignment) {
-                        minAlignment = alignment.value();
-                    }
-                }
-            }
-
-            // If the instruction is a store instruction
-            // and the pointer operand is the argument
-            // Do the same
-            if (auto *storeInst = dyn_cast<StoreInst>(&inst)) {
-                if (storeInst->getPointerOperand() == arg) {
-                    Align alignment = storeInst->getAlign();
-                    if (alignment < minAlignment) {
-                        minAlignment = alignment.value();
-                    }
-                }
-            }
-        }
+    auto optAlign = getPointerAlignByUser(*arg);
+    if (!optAlign.has_value()) {
+        return 0;
     }
-    return Log2_64(minAlignment);
+    return Log2_64(optAlign.value().value());
+    // size_t minAlignment = std::numeric_limits<size_t>::max();
+    // for (auto &block : F) {
+    //     for (auto &inst : block) {
+    //         // If the instruction is a load instruction
+    //         // and the pointer operand is the argument
+    //         // we are interested in, we can check the
+    //         // alignment of the load instruction.
+    //         if (auto *loadInst = dyn_cast<LoadInst>(&inst)) {
+    //             if (loadInst->getPointerOperand() == arg) {
+    //                 Align alignment = loadInst->getAlign();
+    //                 if (alignment < minAlignment) {
+    //                     minAlignment = alignment.value();
+    //                 }
+    //             }
+    //         }
+
+    //         // If the instruction is a store instruction
+    //         // and the pointer operand is the argument
+    //         // Do the same
+    //         if (auto *storeInst = dyn_cast<StoreInst>(&inst)) {
+    //             if (storeInst->getPointerOperand() == arg) {
+    //                 Align alignment = storeInst->getAlign();
+    //                 if (alignment < minAlignment) {
+    //                     minAlignment = alignment.value();
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
+
+    // minAlignment = 8;
+    // errs() << "minAlignment: " << minAlignment << '\n';
+    // return Log2_64(minAlignment);
 }
 
 Matching
@@ -86,6 +95,7 @@ BitTheftPass::matching(std::unordered_map<Argument *, uint64_t> ptrCandidates,
     for (auto &ptrCandidate : ptrCandidates) {
         NewArg newArg;
         uint64_t size = 64 - ptrCandidate.second;
+        errs() << "size: " << size << '\n';
         newArg.emplace_back(size, ptrCandidate.first->getArgNo());
         for (size_t i = 0; i < intCandidates.size(); i++) {
             if (visited[i]) {
@@ -261,8 +271,9 @@ Function * BitTheftPass::getEmbeddedFunc(Function &F, FunctionType *FTy, StringR
         auto &match = matches[i];
         uint64_t ptrArgNo = match[0].original_ind;
         // args[ptrArgNo] = builder.CreateTrunc(newFunc->arg_begin() + i, F.getArg(ptrArgNo)->getType());
-        size_t alignment = (1 << (match[0].size)) - 1;
-        size_t mask = alignment << (64 - match[0].size);
+        uint64_t alignment = (1 << (match[0].size)) - 1;
+        uint64_t mask = ~((1ul << (64ul - match[0].size)) - 1ul);
+        errs() << "Match 0 size" << match[0].size << '\n';
         args[ptrArgNo] = builder.CreateAnd(newFunc->arg_begin() + i, ConstantInt::get(Type::getInt64Ty(F.getContext()), mask));
         args[ptrArgNo] = builder.CreateIntToPtr(args[ptrArgNo], F.getArg(ptrArgNo)->getType());
         Value * var = newFunc->arg_begin() + i;
