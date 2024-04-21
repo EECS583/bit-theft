@@ -3,6 +3,9 @@
 #include <llvm/Support/raw_ostream.h>
 #include <unordered_map>
 
+#include <algorithm>
+#include <ranges>
+
 #define DEBUG_TYPE "bit-theft"
 
 namespace llvm {
@@ -63,28 +66,90 @@ uint64_t BitTheftPass::getMinSpareBitsInPtr(Function &F, Argument *arg) {
     return Log2_64(minAlignment);
 }
 
-std::unordered_map<Argument *, std::vector<Argument *>> BitTheftPass::matching(
-    std::unordered_map<Argument *, uint64_t> ptrCandidates,
-    std::vector<Argument *> intCandidates) {
-        std::unordered_map<Argument *, std::vector<Argument *>> matches;
-        for (auto &intArg : intCandidates) {
-            for (auto &ptrArg : ptrCandidates) {
-                if (ptrArg.second >= intArg->getType()->getIntegerBitWidth()) {
-                    matches[ptrArg.first].push_back(intArg);
-                    ptrArg.second -= intArg->getType()->getIntegerBitWidth();
-                }
+std::unordered_map<Argument *, std::vector<Argument *>>
+BitTheftPass::matching(std::unordered_map<Argument *, uint64_t> ptrCandidates,
+                       std::vector<Argument *> intCandidates) {
+    std::unordered_map<Argument *, std::vector<Argument *>> matches;
+    for (auto &intArg : intCandidates) {
+        for (auto &ptrArg : ptrCandidates) {
+            if (ptrArg.second >= intArg->getType()->getIntegerBitWidth()) {
+                matches[ptrArg.first].push_back(intArg);
+                ptrArg.second -= intArg->getType()->getIntegerBitWidth();
             }
         }
-        return matches;
+    }
+    return matches;
 }
+
+auto BitTheftPass::getCandidateCalleeFunctions(Module &M) {
+    return M.functions() | std::views::filter([](const Function &F) {
+               return Function::isInternalLinkage(F.getLinkage()) &&
+                      find_if(F.args(),
+                              [](const Argument &argument) {
+                                  return argument.getType()->isPointerTy();
+                              }) != F.args().end() &&
+                      !F.hasFnAttribute(Attribute::AttrKind::NoInline);
+           });
+}
+
+auto BitTheftPass::getCandidateCallerFunctions(Module &M) {
+    return M.functions() | std::views::filter([](const Function &F) {
+               return !F.isIntrinsic();
+           });
+}
+
+std::optional<Align> BitTheftPass::getPointerAlignByUser(const Value &V) {
+    if (!V.getType()->isPointerTy())
+        return std::nullopt;
+    auto alignments =
+        V.users() |
+        std::views::transform([&V](const User *U) -> std::optional<Align> {
+            const auto *I = dyn_cast<Instruction>(U);
+            if (I == nullptr)
+                return std::nullopt;
+            switch (I->getOpcode()) {
+            case Instruction::Load: {
+                const auto *load = dyn_cast<LoadInst>(I);
+                return (load->getPointerOperand() == &V)
+                           ? std::make_optional(load->getAlign())
+                           : std::nullopt;
+            }
+            case Instruction::Store: {
+                const auto *store = dyn_cast<StoreInst>(I);
+                return (store->getPointerOperand() == &V)
+                           ? std::make_optional(store->getAlign())
+                           : std::nullopt;
+            }
+            case Instruction::GetElementPtr: {
+                const auto *getElementPtr = dyn_cast<GetElementPtrInst>(I);
+                return (getElementPtr->getPointerOperand() == &V)
+                           ? BitTheftPass::getPointerAlignByUser(*getElementPtr)
+                           : std::nullopt;
+            }
+            case Instruction::PHI:
+                return BitTheftPass::getPointerAlignByUser(*I);
+            default:
+                return std::nullopt;
+            }
+        }) |
+        std::views::filter(
+            [](std::optional<Align> align) { return align.has_value(); }) |
+        std::views::transform(
+            [](std::optional<Align> align) { return align.value(); });
+    return std::ranges::fold_left_first(alignments,
+                                        [](Align accumulator, Align align) {
+                                            return std::min(accumulator, align);
+                                        });
+}
+
 PreservedAnalyses BitTheftPass::run(Module &M, ModuleAnalysisManager &AM) {
-    errs() << "Module Pass: " << M.getName() << '\n';
-    for (auto &function : M.functions()) {
-        if (function.getName().startswith("llvm.")) {
-            continue;
+    for (const auto &F : BitTheftPass::getCandidateCalleeFunctions(M)) {
+        errs() << F.getName() << ": \n";
+        for (const auto &argument : F.args()) {
+            auto maybe_align = BitTheftPass::getPointerAlignByUser(argument);
+            if (maybe_align.has_value())
+                errs() << maybe_align.value().value() << '\n';
         }
-        errs() << function.getName() << ": "
-               << Function::isInternalLinkage(function.getLinkage()) << '\n';
     }
     return PreservedAnalyses::all();
 }
