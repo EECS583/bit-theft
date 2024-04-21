@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -47,9 +48,16 @@ static bool is_alternating(const Tree *tree, bool last) {
             is_alternating(tree->right, tree->value));
 }
 
+bool is_alternating_ref(const Tree *tree, bool last) {
+    return tree == NULL ||
+           (last != tree->value && is_alternating(tree->left, tree->value) &&
+            is_alternating(tree->right, tree->value));
+}
+
 int main() {
     srand((unsigned int)time(NULL));
     Tree *tree = generate_random_tree((size_t)(rand() % 100));
+    assert(is_alternating(tree, true) == is_alternating_ref(tree, true));
     printf("Is tree alternating: %s\n",
            is_alternating(tree, true) ? "true" : "false");
     free_tree(tree);

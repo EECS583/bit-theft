@@ -249,7 +249,6 @@ BitTheftPass::run(Module &M, [[maybe_unused]] ModuleAnalysisManager &AM) {
     }
     for (Function *F : appliedFunctions)
         F->eraseFromParent();
-    errs() << M << '\n';
     return PreservedAnalyses::all();
 }
 
