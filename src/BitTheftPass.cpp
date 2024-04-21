@@ -231,12 +231,11 @@ BitTheftPass::run(Module &M, [[maybe_unused]] ModuleAnalysisManager &AM) {
                 embeddedArgs.push_back(ptr);
             }
             for (const Argument &argument : F.args()) {
-                if (std::find_if(
-                        binPacks.begin(), binPacks.end(),
-                        [&argument](const BitTheftPass::BinPack &pack) {
-                            return pack.first.getArgument() == &argument ||
-                                   is_contained(pack.second, &argument);
-                        }) == binPacks.end())
+                if (find_if(binPacks,
+                            [&argument](const BitTheftPass::BinPack &pack) {
+                                return pack.first.getArgument() == &argument ||
+                                       is_contained(pack.second, &argument);
+                            }) == binPacks.end())
                     embeddedArgs.push_back(
                         I->getArgOperand(argument.getArgNo()));
             }
