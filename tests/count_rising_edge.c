@@ -35,7 +35,7 @@ static size_t count_rising_edge(const List *list, size_t rising_edges,
                 : rising_edges;
 }
 
-int main(int argc, char *argv[]) {
+int main() {
     srand((unsigned int)time(NULL));
     List first = {.value = true, .next = NULL};
     List second = {.value = false, .next = NULL};

@@ -13,6 +13,9 @@ test: tests/count_rising_edge.steal.ll
 tests/%.ll: tests/%.c
 	$(CC) -emit-llvm -S $< -O1 -o $@
 
+tests/%.bin: tests/%.ll
+	$(CC) $< -o $@
+
 tests/%.steal.bc: tests/%.ll
 	$(OPT) -load-pass-plugin="${PLUGIN}" -passes='bit-theft' $< -o $@
 

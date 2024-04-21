@@ -1,4 +1,5 @@
 #include "BitTheftPass.h"
+
 #include <cstdint>
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/IR/Argument.h>
@@ -12,6 +13,7 @@
 #include <llvm/IR/Operator.h>
 #include <llvm/IR/Value.h>
 #include <llvm/Support/raw_ostream.h>
+#include <llvm/Transforms/Utils/Cloning.h>
 #include <unordered_map>
 #include <vector>
 
@@ -21,6 +23,141 @@
 #define DEBUG_TYPE "bit-theft"
 
 namespace llvm {
+
+bool BitTheftPass::isCandidateCalleeFunction(const Function &F) {
+    return F.hasInternalLinkage() && !F.isIntrinsic() && !F.isDeclaration() &&
+           find_if(F.args(),
+                   [](const Argument &argument) {
+                       return argument.getType()->isPointerTy();
+                   }) != F.args().end() &&
+           find_if(F.args(), [](const Argument &argument) {
+               return argument.getType()->isIntegerTy() &&
+                      argument.getType()->getIntegerBitWidth() <= 4;
+           }) != F.args().end();
+    ;
+}
+
+std::optional<Align> BitTheftPass::getPointerAlignByUser(const Value &V) {
+    if (!V.getType()->isPointerTy())
+        return std::nullopt;
+    auto alignments =
+        V.users() |
+        std::views::transform([&V](const User *U) -> std::optional<Align> {
+            const auto *I = dyn_cast<Instruction>(U);
+            if (I == nullptr)
+                return std::nullopt;
+            switch (I->getOpcode()) {
+            case Instruction::Load: {
+                const auto *load = dyn_cast<LoadInst>(I);
+                return (load->getPointerOperand() == &V)
+                           ? std::make_optional(load->getAlign())
+                           : std::nullopt;
+            }
+            case Instruction::Store: {
+                const auto *store = dyn_cast<StoreInst>(I);
+                return (store->getPointerOperand() == &V)
+                           ? std::make_optional(store->getAlign())
+                           : std::nullopt;
+            }
+            case Instruction::GetElementPtr: {
+                const auto *getElementPtr = dyn_cast<GetElementPtrInst>(I);
+                return (getElementPtr->getPointerOperand() == &V)
+                           ? BitTheftPass::getPointerAlignByUser(*getElementPtr)
+                           : std::nullopt;
+            }
+            case Instruction::PHI:
+                return BitTheftPass::getPointerAlignByUser(*I);
+            default:
+                return std::nullopt;
+            }
+        }) |
+        std::views::filter(
+            [](std::optional<Align> align) { return align.has_value(); }) |
+        std::views::transform(
+            [](std::optional<Align> align) { return align.value(); });
+    return std::ranges::fold_left_first(alignments,
+                                        [](Align accumulator, Align align) {
+                                            return std::min(accumulator, align);
+                                        });
+}
+
+BitTheftPass::Niche::Niche(Argument &argument)
+    : argument(&argument),
+      align(BitTheftPass::getPointerAlignByUser(argument).value_or(Align())) {}
+
+Argument *BitTheftPass::Niche::getArgument() noexcept { return this->argument; }
+
+const Argument *BitTheftPass::Niche::getArgument() const noexcept {
+    return this->argument;
+}
+
+Align BitTheftPass::Niche::getAlign() const noexcept { return this->align; }
+
+SmallVector<BitTheftPass::BinPack>
+BitTheftPass::getBinPackedNiche(Function &F) {
+    auto niches = F.args() | std::views::filter([](const Argument &argument) {
+                      return argument.getType()->isPointerTy();
+                  }) |
+                  std::views::transform([](Argument &argument) {
+                      return BitTheftPass::Niche(argument);
+                  }) |
+                  std::views::filter([](const Niche &niche) {
+                      return niche.getAlign().value() > 1;
+                  });
+    auto thieves = F.args() | std::views::filter([](const Argument &argument) {
+                       const auto *intTy =
+                           dyn_cast<IntegerType>(argument.getType());
+                       return intTy != nullptr && intTy->getBitWidth() <= 4;
+                   });
+
+    SmallVector<BinPack> bins;
+    for (const auto &niche : niches)
+        bins.emplace_back(niche, SmallVector<Argument *>{});
+
+    // uses first-fit heuristics
+    for (Argument &thief : thieves) {
+        auto bits_needed =
+            static_cast<uint8_t>(thief.getType()->getIntegerBitWidth());
+        for (auto &[niche, thieves] : bins) {
+            auto occupied_bits = std::ranges::fold_left(
+                thieves, static_cast<uint8_t>(0),
+                [](uint8_t accumulator, const Argument *argument) -> uint8_t {
+                    return accumulator +
+                           static_cast<uint8_t>(
+                               argument->getType()->getIntegerBitWidth());
+                });
+            if (bits_needed + occupied_bits <= Log2(niche.getAlign())) {
+                thieves.push_back(&thief);
+                break;
+            }
+        }
+    }
+    return bins;
+}
+
+void createTransformedFunction(Function &F) {
+    auto binPacks = BitTheftPass::getBinPackedNiche(F);
+    SmallVector<Type *> argumentTypes;
+    for (const Argument &argument : F.args()) {
+        if (std::find_if(binPacks.begin(), binPacks.end(),
+                         [&argument](const BitTheftPass::BinPack &pack) {
+                             return is_contained(pack.second, &argument);
+                         }) == binPacks.end())
+            argumentTypes.push_back(argument.getType());
+    }
+    auto *FTy =
+        FunctionType::get(F.getReturnType(), argumentTypes, F.isVarArg());
+    errs() << "new funct ty: " << *FTy << '\n';
+    auto *transformed =
+        Function::Create(FTy, F.getLinkage(), "", F.getParent());
+    ValueToValueMapTy VMap;
+
+    SmallVector<ReturnInst *, 8> Returns;
+    CloneFunctionInto(transformed, &F, VMap,
+                      CloneFunctionChangeType::LocalChangesOnly, Returns,
+                      "_bit_theft");
+    errs() << *transformed << '\n';
+}
 
 std::vector<Argument *> BitTheftPass::getBitTheftCandidate(Function &F) {
     std::vector<Argument *> candidates;
@@ -111,61 +248,6 @@ BitTheftPass::matching(std::unordered_map<Argument *, uint64_t> ptrCandidates,
     }
 
     return matches;
-}
-
-bool BitTheftPass::isCandidateCalleeFunction(const Function &F) {
-    return F.hasInternalLinkage() && !F.isIntrinsic() && !F.isDeclaration() &&
-           find_if(F.args(), [](const Argument &argument) {
-               return argument.getType()->isPointerTy();
-           }) != F.args().end();
-}
-
-bool BitTheftPass::isCandidateCallerFunction(const Function &F) {
-    return !F.isIntrinsic() && !F.isDeclaration();
-}
-
-std::optional<Align> BitTheftPass::getPointerAlignByUser(const Value &V) {
-    if (!V.getType()->isPointerTy())
-        return std::nullopt;
-    auto alignments =
-        V.users() |
-        std::views::transform([&V](const User *U) -> std::optional<Align> {
-            const auto *I = dyn_cast<Instruction>(U);
-            if (I == nullptr)
-                return std::nullopt;
-            switch (I->getOpcode()) {
-            case Instruction::Load: {
-                const auto *load = dyn_cast<LoadInst>(I);
-                return (load->getPointerOperand() == &V)
-                           ? std::make_optional(load->getAlign())
-                           : std::nullopt;
-            }
-            case Instruction::Store: {
-                const auto *store = dyn_cast<StoreInst>(I);
-                return (store->getPointerOperand() == &V)
-                           ? std::make_optional(store->getAlign())
-                           : std::nullopt;
-            }
-            case Instruction::GetElementPtr: {
-                const auto *getElementPtr = dyn_cast<GetElementPtrInst>(I);
-                return (getElementPtr->getPointerOperand() == &V)
-                           ? BitTheftPass::getPointerAlignByUser(*getElementPtr)
-                           : std::nullopt;
-            }
-            case Instruction::PHI:
-                return BitTheftPass::getPointerAlignByUser(*I);
-            default:
-                return std::nullopt;
-            }
-        }) |
-        std::views::filter(
-            [](std::optional<Align> align) { return align.has_value(); }) |
-        std::views::transform(
-            [](std::optional<Align> align) { return align.value(); });
-    return std::ranges::fold_left_first(alignments,
-                                        [](Align accumulator, Align align) {
-                                            return std::min(accumulator, align);
-                                        });
 }
 
 std::vector<Argument *> BitTheftPass::getOthers(Function &F, Matching matches) {
@@ -266,25 +348,30 @@ Function *BitTheftPass::getEmbeddedFunc(Function &F, FunctionType *FTy,
 }
 
 PreservedAnalyses BitTheftPass::run(Module &M, ModuleAnalysisManager &AM) {
-    errs() << "Module Pass: " << M.getName() << '\n';
     for (auto &function : M.functions()) {
-        if (function.isIntrinsic() || function.isDeclaration()) {
-            continue;
+        if (isCandidateCalleeFunction(function)) {
+            errs() << *function.getFunctionType() << '\n';
+            // createTransformedFunction(function);
         }
-        std::vector<Argument *> intCandidates = getBitTheftCandidate(function);
-        std::unordered_map<Argument *, uint64_t> ptrCandidates =
-            getBitTheftCandidatePtr(function);
-        Matching matches = matching(ptrCandidates, intCandidates);
-        std::vector<Argument *> others = getOthers(function, matches);
-        Function *newFunc = getEmbeddedFunc(
-            function,
-            getEmbeddedFuncTy(function, matches, others, function.getContext()),
-            function.getName().str() + "_embedded", matches, others);
-        for (const auto &user : function.users()) {
-            if (auto *callInst = dyn_cast<CallInst>(user)) {
-                embedAtCaller(callInst, &function, newFunc, matches, others);
-            }
-        }
+        // if (function.isIntrinsic() || function.isDeclaration()) {
+        //     continue;
+        // }
+        // std::vector<Argument *> intCandidates =
+        // getBitTheftCandidate(function); std::unordered_map<Argument *,
+        // uint64_t> ptrCandidates =
+        //     getBitTheftCandidatePtr(function);
+        // Matching matches = matching(ptrCandidates, intCandidates);
+        // std::vector<Argument *> others = getOthers(function, matches);
+        // Function *newFunc = getEmbeddedFunc(
+        //     function,
+        //     getEmbeddedFuncTy(function, matches, others,
+        //     function.getContext()), function.getName().str() + "_embedded",
+        //     matches, others);
+        // for (const auto &user : function.users()) {
+        //     if (auto *callInst = dyn_cast<CallInst>(user)) {
+        //         embedAtCaller(callInst, &function, newFunc, matches, others);
+        //     }
+        // }
     }
     return PreservedAnalyses::all();
 }

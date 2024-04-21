@@ -17,6 +17,7 @@ llvmGetPassPluginInfo() {
                            elements) {
                         if (name == "bit-theft") {
                             MPM.addPass(BitTheftPass());
+                            MPM.addPass(ModuleInlinerWrapperPass());
                             return true;
                         }
                         return false;
