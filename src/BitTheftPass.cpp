@@ -197,7 +197,7 @@ std::vector<Argument *> BitTheftPass::getOthers(Function &F, Matching matches) {
 void BitTheftPass::embedAtCaller(CallInst * callInst, Function* caller, Function * callee, Matching matches, std::vector<Argument *> others) {
     std::vector<Value *> embeddedArgs(matches.size());
 
-    if (callInst->getFunction() == callee) {
+    if (callInst->getParent()->getParent() == callee) {
         return;
     }
 

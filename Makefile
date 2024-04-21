@@ -19,5 +19,8 @@ tests/%.steal.bc: tests/%.ll
 tests/%.steal.ll: tests/%.steal.bc
 	$(DIS) $< -o $@
 
+tests/%.steal.bin: tests/%.steal.bc
+	$(CC) $< -o $@
+
 clean:
 	rm -f tests/*.bc tests/*.ll
