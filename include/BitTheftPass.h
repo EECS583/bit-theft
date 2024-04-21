@@ -31,6 +31,7 @@ class BitTheftPass : public PassInfoMixin<BitTheftPass> {
     void embedAtCaller(CallInst * callInst, Function* caller, Function * callee, Matching matches, std::vector<Argument *> others);
     FunctionType * getEmbeddedFuncTy(Function &F, Matching matches, std::vector<Argument *> others, LLVMContext &C);
     Function * getEmbeddedFunc(Function &F, FunctionType *FTy, StringRef name, Matching matches, std::vector<Argument *> others);
+    void printFunc(Function &F);
 };
 
 } // end namespace llvm

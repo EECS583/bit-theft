@@ -129,6 +129,10 @@ std::vector<Argument *> BitTheftPass::getOthers(Function &F, Matching matches) {
 void BitTheftPass::embedAtCaller(CallInst * callInst, Function* caller, Function * callee, Matching matches, std::vector<Argument *> others) {
     std::vector<Value *> embeddedArgs(matches.size());
 
+    if (callInst->getFunction() == callee) {
+        return;
+    }
+
     for (size_t i = 0; i < matches.size(); i++) {
         auto &match = matches[i];
         uint64_t ptrArgNo = match[0].original_ind;
@@ -180,7 +184,7 @@ FunctionType * BitTheftPass::getEmbeddedFuncTy(Function &F, Matching matches, st
 }
 
 Function * BitTheftPass::getEmbeddedFunc(Function &F, FunctionType *FTy, StringRef name, Matching matches, std::vector<Argument *> others) {
-    Function *newFunc = Function::Create(FTy, F.getLinkage(), name, F.getParent());
+    Function *newFunc = Function::Create(FTy, F.getLinkage(), name);
     BasicBlock *entry = BasicBlock::Create(F.getContext(), "entry", newFunc);
     IRBuilder<> builder(entry);
     std::vector<Value *> args(F.arg_size());
@@ -201,6 +205,9 @@ Function * BitTheftPass::getEmbeddedFunc(Function &F, FunctionType *FTy, StringR
             args[intArgNo] = trunc;
         }
     }
+    for (size_t i = 0; i < others.size(); i++) {
+        args[others[i]->getArgNo()] = newFunc->arg_begin() + matches.size() + i;
+    }
     Value * callInst = builder.CreateCall(&F, args);
     builder.CreateRet(callInst);
     return newFunc;
@@ -208,6 +215,7 @@ Function * BitTheftPass::getEmbeddedFunc(Function &F, FunctionType *FTy, StringR
 
 PreservedAnalyses BitTheftPass::run(Module &M, ModuleAnalysisManager &AM) {
     errs() << "Module Pass: " << M.getName() << '\n';
+    std::vector<Function *> newFunctions;
     for (auto &function : M.functions()) {
         if (function.isIntrinsic() || function.isDeclaration()) {
             continue;
@@ -223,14 +231,38 @@ PreservedAnalyses BitTheftPass::run(Module &M, ModuleAnalysisManager &AM) {
             continue;
         }
         std::vector<Argument *> others = getOthers(function, matches);
-        Function * newFunc = getEmbeddedFunc(function, getEmbeddedFuncTy(function, matches, others, function.getContext()), function.getName().str() + "_embedded", matches, others);
+        Function * newFunc = getEmbeddedFunc(function, getEmbeddedFuncTy(function, matches, others, function.getContext()), function.getName().str() + ".bittheft", matches, others);
+        newFunctions.push_back(newFunc);
         for (const auto &user : function.users()) {
             if (auto *callInst = dyn_cast<CallInst>(user)) {
                 embedAtCaller(callInst, &function, newFunc, matches, others);
             }
         }
     }
+    for (auto &newFunc : newFunctions) {
+        M.getFunctionList().push_back(newFunc);
+    }
+    for (auto &function : M.functions()) {
+        if (function.isIntrinsic() || function.isDeclaration()) {
+            continue;
+        }
+        if (!function.hasInternalLinkage()) {
+            continue;
+        }
+        printFunc(function);
+    }
     return PreservedAnalyses::all();
+}
+void BitTheftPass::printFunc(Function &F) {
+    errs() << "Function: " << F.getName() << '\n';
+    for (auto &arg : F.args()) {
+        errs() << "Arg: " << arg << '\n';
+    }
+    for (auto &block : F) {
+        for (auto &inst : block) {
+            errs() << inst << '\n';
+        }
+    }
 }
 
 } // namespace llvm
