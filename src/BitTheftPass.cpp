@@ -15,6 +15,9 @@
 #include <unordered_map>
 #include <vector>
 
+#include <algorithm>
+#include <ranges>
+
 #define DEBUG_TYPE "bit-theft"
 
 namespace llvm {
@@ -75,28 +78,37 @@ uint64_t BitTheftPass::getMinSpareBitsInPtr(Function &F, Argument *arg) {
     return Log2_64(minAlignment);
 }
 
-Matching BitTheftPass::matching(
-    std::unordered_map<Argument *, uint64_t> ptrCandidates,
-    std::vector<Argument *> intCandidates
-    ) {
-        Matching matches;
-        std::vector<bool> visited(intCandidates.size(), false);
-        for (auto & ptrCandidate : ptrCandidates){
-            NewArg newArg;
-            uint64_t size = 64 - ptrCandidate.second;
-            newArg.emplace_back(size, ptrCandidate.first->getArgNo());
-            for (size_t i = 0; i < intCandidates.size(); i++) {
-                if (visited[i]) {
-                    continue;
-                }
-                if (size >= intCandidates[i]->getType()->getIntegerBitWidth()) {
-                    newArg.emplace_back(intCandidates[i]->getType()->getIntegerBitWidth(), intCandidates[i]->getArgNo());
-                    visited[i] = true;
-                    size += intCandidates[i]->getType()->getIntegerBitWidth();
-                }
+Matching
+BitTheftPass::matching(std::unordered_map<Argument *, uint64_t> ptrCandidates,
+                       std::vector<Argument *> intCandidates) {
+    Matching matches;
+    std::vector<bool> visited(intCandidates.size(), false);
+    for (auto &ptrCandidate : ptrCandidates) {
+        NewArg newArg;
+        uint64_t size = 64 - ptrCandidate.second;
+        newArg.emplace_back(size, ptrCandidate.first->getArgNo());
+        for (size_t i = 0; i < intCandidates.size(); i++) {
+            if (visited[i]) {
+                continue;
             }
+            if (size >= intCandidates[i]->getType()->getIntegerBitWidth()) {
+                newArg.emplace_back(
+                    intCandidates[i]->getType()->getIntegerBitWidth(),
+                    intCandidates[i]->getArgNo());
+                visited[i] = true;
+                size += intCandidates[i]->getType()->getIntegerBitWidth();
+            }
+        }
+        matches.push_back(newArg);
+    }
+    for (auto &intCandidate : intCandidates) {
+        if (!visited[intCandidate->getArgNo()]) {
+            NewArg newArg;
+            newArg.emplace_back(intCandidate->getType()->getIntegerBitWidth(),
+                                intCandidate->getArgNo());
             matches.push_back(newArg);
         }
+    }
 
         // for (auto &intCandidate : intCandidates) {
         //     if (!visited[intCandidate->getArgNo()]) {
@@ -109,6 +121,60 @@ Matching BitTheftPass::matching(
         return matches;
 }
 
+bool BitTheftPass::isCandidateCalleeFunction(const Function &F) {
+    return F.hasInternalLinkage() && !F.isIntrinsic() && !F.isDeclaration() &&
+           find_if(F.args(), [](const Argument &argument) {
+               return argument.getType()->isPointerTy();
+           }) != F.args().end();
+}
+
+bool BitTheftPass::isCandidateCallerFunction(const Function &F) {
+    return !F.isIntrinsic() && !F.isDeclaration();
+}
+
+std::optional<Align> BitTheftPass::getPointerAlignByUser(const Value &V) {
+    if (!V.getType()->isPointerTy())
+        return std::nullopt;
+    auto alignments =
+        V.users() |
+        std::views::transform([&V](const User *U) -> std::optional<Align> {
+            const auto *I = dyn_cast<Instruction>(U);
+            if (I == nullptr)
+                return std::nullopt;
+            switch (I->getOpcode()) {
+            case Instruction::Load: {
+                const auto *load = dyn_cast<LoadInst>(I);
+                return (load->getPointerOperand() == &V)
+                           ? std::make_optional(load->getAlign())
+                           : std::nullopt;
+            }
+            case Instruction::Store: {
+                const auto *store = dyn_cast<StoreInst>(I);
+                return (store->getPointerOperand() == &V)
+                           ? std::make_optional(store->getAlign())
+                           : std::nullopt;
+            }
+            case Instruction::GetElementPtr: {
+                const auto *getElementPtr = dyn_cast<GetElementPtrInst>(I);
+                return (getElementPtr->getPointerOperand() == &V)
+                           ? BitTheftPass::getPointerAlignByUser(*getElementPtr)
+                           : std::nullopt;
+            }
+            case Instruction::PHI:
+                return BitTheftPass::getPointerAlignByUser(*I);
+            default:
+                return std::nullopt;
+            }
+        }) |
+        std::views::filter(
+            [](std::optional<Align> align) { return align.has_value(); }) |
+        std::views::transform(
+            [](std::optional<Align> align) { return align.value(); });
+    return std::ranges::fold_left_first(alignments,
+                                        [](Align accumulator, Align align) {
+                                            return std::min(accumulator, align);
+                                        });
+}
 
 std::vector<Argument *> BitTheftPass::getOthers(Function &F, Matching matches) {
     std::vector<Argument *> others;
@@ -168,8 +234,9 @@ void BitTheftPass::embedAtCaller(CallInst * callInst, Function* caller, Function
     callInst->eraseFromParent();
 }
 
-
-FunctionType * BitTheftPass::getEmbeddedFuncTy(Function &F, Matching matches, std::vector<Argument *> others, LLVMContext &C) {
+FunctionType *BitTheftPass::getEmbeddedFuncTy(Function &F, Matching matches,
+                                              std::vector<Argument *> others,
+                                              LLVMContext &C) {
     std::vector<Type *> argTypes;
     for (auto &match : matches) {
         argTypes.push_back(IntegerType::get(C, 64));
@@ -200,7 +267,8 @@ Function * BitTheftPass::getEmbeddedFunc(Function &F, FunctionType *FTy, StringR
         for (size_t j = 1; j < match.size(); j++) {
             uint64_t intArgNo = match[j].original_ind;
             uint64_t intArgBits = match[j].size;
-            Value *trunc = builder.CreateTrunc(var, F.getArg(intArgNo)->getType());
+            Value *trunc =
+                builder.CreateTrunc(var, F.getArg(intArgNo)->getType());
             var = builder.CreateAShr(trunc, intArgBits);
             args[intArgNo] = trunc;
         }
@@ -225,7 +293,8 @@ PreservedAnalyses BitTheftPass::run(Module &M, ModuleAnalysisManager &AM) {
         }
         errs() << "====================\n" << function.getName() << '\n';
         std::vector<Argument *> intCandidates = getBitTheftCandidate(function);
-        std::unordered_map<Argument *, uint64_t> ptrCandidates = getBitTheftCandidatePtr(function);
+        std::unordered_map<Argument *, uint64_t> ptrCandidates =
+            getBitTheftCandidatePtr(function);
         Matching matches = matching(ptrCandidates, intCandidates);
         if (matches.empty()) {
             continue;

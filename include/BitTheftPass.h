@@ -6,11 +6,12 @@
 #include <llvm/IR/Function.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/PassManager.h>
+#include <optional>
 #include <unordered_map>
 #include <vector>
 
 using Element = struct {
-  uint64_t size, original_ind;
+    uint64_t size, original_ind;
 };
 using NewArg = std::vector<Element>;
 using Matching = std::vector<NewArg>;
@@ -19,14 +20,17 @@ namespace llvm {
 
 class BitTheftPass : public PassInfoMixin<BitTheftPass> {
   public:
+    static bool isCandidateCalleeFunction(const Function &F);
+    static bool isCandidateCallerFunction(const Function &F);
+    static std::optional<Align> getPointerAlignByUser(const Value &V);
+
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
     std::vector<Argument *> getBitTheftCandidate(Function &F);
     std::unordered_map<Argument *, uint64_t>
     getBitTheftCandidatePtr(Function &F);
     uint64_t getMinSpareBitsInPtr(Function &F, Argument *arg);
-    Matching matching(
-      std::unordered_map<Argument *, uint64_t> ptrCandidates,
-      std::vector<Argument *> intCandidates);
+    Matching matching(std::unordered_map<Argument *, uint64_t> ptrCandidates,
+                      std::vector<Argument *> intCandidates);
     std::vector<Argument *> getOthers(Function &F, Matching matches);
     void embedAtCaller(CallInst * callInst, Function* caller, Function * callee, Matching matches, std::vector<Argument *> others);
     FunctionType * getEmbeddedFuncTy(Function &F, Matching matches, std::vector<Argument *> others, LLVMContext &C);
