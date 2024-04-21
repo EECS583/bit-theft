@@ -20,6 +20,8 @@ llvmGetPassPluginInfo() {
                             MPM.addPass(createModuleToFunctionPassAdaptor(
                                 SimplifyCFGPass()));
                             MPM.addPass(BitTheftPass());
+                            MPM.addPass(createModuleToFunctionPassAdaptor(
+                                SimplifyCFGPass()));
                             return true;
                         }
                         return false;
