@@ -113,21 +113,15 @@ BitTheftPass::matching(std::unordered_map<Argument *, uint64_t> ptrCandidates,
     return matches;
 }
 
-auto BitTheftPass::getCandidateCalleeFunctions(Module &M) {
-    return M.functions() | std::views::filter([](const Function &F) {
-               return Function::isInternalLinkage(F.getLinkage()) &&
-                      find_if(F.args(),
-                              [](const Argument &argument) {
-                                  return argument.getType()->isPointerTy();
-                              }) != F.args().end() &&
-                      !F.hasFnAttribute(Attribute::AttrKind::NoInline);
-           });
+bool BitTheftPass::isCandidateCalleeFunction(const Function &F) {
+    return F.hasInternalLinkage() && !F.isIntrinsic() && !F.isDeclaration() &&
+           find_if(F.args(), [](const Argument &argument) {
+               return argument.getType()->isPointerTy();
+           }) != F.args().end();
 }
 
-auto BitTheftPass::getCandidateCallerFunctions(Module &M) {
-    return M.functions() | std::views::filter([](const Function &F) {
-               return !F.isIntrinsic();
-           });
+bool BitTheftPass::isCandidateCallerFunction(const Function &F) {
+    return !F.isIntrinsic() && !F.isDeclaration();
 }
 
 std::optional<Align> BitTheftPass::getPointerAlignByUser(const Value &V) {
