@@ -91,7 +91,7 @@ BitTheftPass::matching(std::unordered_map<Argument *, uint64_t> ptrCandidates,
             if (visited[i]) {
                 continue;
             }
-            if (size >= intCandidates[i]->getType()->getIntegerBitWidth()) {
+            if (64 - size >= intCandidates[i]->getType()->getIntegerBitWidth()) {
                 newArg.emplace_back(
                     intCandidates[i]->getType()->getIntegerBitWidth(),
                     intCandidates[i]->getArgNo());
@@ -99,16 +99,18 @@ BitTheftPass::matching(std::unordered_map<Argument *, uint64_t> ptrCandidates,
                 size += intCandidates[i]->getType()->getIntegerBitWidth();
             }
         }
-        matches.push_back(newArg);
-    }
-    for (auto &intCandidate : intCandidates) {
-        if (!visited[intCandidate->getArgNo()]) {
-            NewArg newArg;
-            newArg.emplace_back(intCandidate->getType()->getIntegerBitWidth(),
-                                intCandidate->getArgNo());
+        if (newArg.size() > 1){
             matches.push_back(newArg);
         }
     }
+    // for (auto &intCandidate : intCandidates) {
+    //     if (!visited[intCandidate->getArgNo()]) {
+    //         NewArg newArg;
+    //         newArg.emplace_back(intCandidate->getType()->getIntegerBitWidth(),
+    //                             intCandidate->getArgNo());
+    //         matches.push_back(newArg);
+    //     }
+    // }
 
         // for (auto &intCandidate : intCandidates) {
         //     if (!visited[intCandidate->getArgNo()]) {
@@ -203,7 +205,7 @@ void BitTheftPass::embedAtCaller(CallInst * callInst, Function* caller, Function
         auto &match = matches[i];
         uint64_t ptrArgNo = match[0].original_ind;
         uint64_t availableLSB = 0;
-        // errs() << "ptrArgNo: " << ptrArgNo << '\n';
+        errs() << "ptrArgNo: " << ptrArgNo << '\n';
         // errs() << "CallInst: " << *callInst << '\n';
         errs() << "Matches Size: " << matches.size() << '\n';
         // errs() << "Match Size: " << match.size() << '\n';
@@ -313,9 +315,6 @@ PreservedAnalyses BitTheftPass::run(Module &M, ModuleAnalysisManager &AM) {
     }
     for (auto &function : M.functions()) {
         if (function.isIntrinsic() || function.isDeclaration()) {
-            continue;
-        }
-        if (!function.hasInternalLinkage()) {
             continue;
         }
         printFunc(function);
