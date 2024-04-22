@@ -80,24 +80,7 @@ BitTheftPass::matching(std::unordered_map<Argument *, uint64_t> ptrCandidates,
             matches.push_back(newArg);
         }
     }
-    // for (auto &intCandidate : intCandidates) {
-    //     if (!visited[intCandidate->getArgNo()]) {
-    //         NewArg newArg;
-    //         newArg.emplace_back(intCandidate->getType()->getIntegerBitWidth(),
-    //                             intCandidate->getArgNo());
-    //         matches.push_back(newArg);
-    //     }
-    // }
-
-        // for (auto &intCandidate : intCandidates) {
-        //     if (!visited[intCandidate->getArgNo()]) {
-        //         NewArg newArg;
-        //         newArg.emplace_back(intCandidate->getType()->getIntegerBitWidth(), intCandidate->getArgNo());
-        //         matches.push_back(newArg);
-        //     }
-        // }
-
-        return matches;
+    return matches;
 }
 
 bool BitTheftPass::isCandidateCalleeFunction(const Function &F) {
