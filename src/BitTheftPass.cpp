@@ -129,7 +129,10 @@ BitTheftPass::getBinPackedNiche(const Function &F) {
             }
         }
     }
-    return bins;
+    auto filtered = bins | std::views::filter([](const BinPack &pack) {
+                        return !pack.second.empty();
+                    });
+    return SmallVector<BinPack>(filtered.begin(), filtered.end());
 }
 
 std::pair<Function *, SmallVector<unsigned int>>
