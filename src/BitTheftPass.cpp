@@ -147,7 +147,8 @@ BitTheftPass::createTransformedFunction(
         for (const auto *thief : thieves)
             mappedArgNo[thief->getArgNo()] =
                 static_cast<unsigned int>(argumentTypes.size());
-        argumentTypes.push_back(niche.getArgument()->getType());
+        argumentTypes.push_back(
+            PointerType::get(F.getContext(), F.getAddressSpace()));
     }
     for (const Argument &argument : F.args()) {
         if (mappedArgNo[argument.getArgNo()] == F.arg_size()) {
