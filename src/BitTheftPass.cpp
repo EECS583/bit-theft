@@ -52,39 +52,6 @@ uint64_t BitTheftPass::getMinSpareBitsInPtr(Function &F, Argument *arg) {
         return 0;
     }
     return Log2_64(optAlign.value().value());
-    // size_t minAlignment = std::numeric_limits<size_t>::max();
-    // for (auto &block : F) {
-    //     for (auto &inst : block) {
-    //         // If the instruction is a load instruction
-    //         // and the pointer operand is the argument
-    //         // we are interested in, we can check the
-    //         // alignment of the load instruction.
-    //         if (auto *loadInst = dyn_cast<LoadInst>(&inst)) {
-    //             if (loadInst->getPointerOperand() == arg) {
-    //                 Align alignment = loadInst->getAlign();
-    //                 if (alignment < minAlignment) {
-    //                     minAlignment = alignment.value();
-    //                 }
-    //             }
-    //         }
-
-    //         // If the instruction is a store instruction
-    //         // and the pointer operand is the argument
-    //         // Do the same
-    //         if (auto *storeInst = dyn_cast<StoreInst>(&inst)) {
-    //             if (storeInst->getPointerOperand() == arg) {
-    //                 Align alignment = storeInst->getAlign();
-    //                 if (alignment < minAlignment) {
-    //                     minAlignment = alignment.value();
-    //                 }
-    //             }
-    //         }
-    //     }
-    // }
-
-    // minAlignment = 8;
-    // errs() << "minAlignment: " << minAlignment << '\n';
-    // return Log2_64(minAlignment);
 }
 
 Matching
