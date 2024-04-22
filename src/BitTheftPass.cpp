@@ -225,6 +225,7 @@ BitTheftPass::run(Module &M, [[maybe_unused]] ModuleAnalysisManager &AM) {
                                   extended,
                                   ConstantInt::get(ptrIntegerTy, offset));
                     casted = BinaryOperator::CreateOr(casted, shifted, "", I);
+                    offset += thief->getType()->getIntegerBitWidth();
                 }
                 ptr = new IntToPtrInst(casted, niche.getArgument()->getType(),
                                        "", I);
