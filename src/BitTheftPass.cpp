@@ -240,6 +240,12 @@ Function * BitTheftPass::getEmbeddedFunc(Function &F, FunctionType *FTy, StringR
         args[others[i]->getArgNo()] = newFunc->arg_begin() + matches.size() + i;
     }
     Value * callInst = builder.CreateCall(&F, args);
+
+    if (F.getReturnType()->isVoidTy()) {
+        builder.CreateRetVoid();
+        return newFunc;
+    }
+
     builder.CreateRet(callInst);
     return newFunc;
 }
