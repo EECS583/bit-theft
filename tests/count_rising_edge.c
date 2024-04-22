@@ -37,10 +37,10 @@ static size_t count_rising_edge(const List *list, size_t rising_edges,
 
 size_t count_rising_edge_ref(const List *list, size_t rising_edges,
                              bool last_value) {
-    return list ? count_rising_edge(list->next,
-                                    rising_edges +
-                                        ((!last_value && list->value) ? 1 : 0),
-                                    list->value)
+    return list ? count_rising_edge_ref(
+                      list->next,
+                      rising_edges + ((!last_value && list->value) ? 1 : 0),
+                      list->value)
                 : rising_edges;
 }
 

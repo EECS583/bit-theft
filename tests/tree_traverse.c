@@ -49,9 +49,9 @@ static bool is_alternating(const Tree *tree, bool last) {
 }
 
 bool is_alternating_ref(const Tree *tree, bool last) {
-    return tree == NULL ||
-           (last != tree->value && is_alternating(tree->left, tree->value) &&
-            is_alternating(tree->right, tree->value));
+    return tree == NULL || (last != tree->value &&
+                            is_alternating_ref(tree->left, tree->value) &&
+                            is_alternating_ref(tree->right, tree->value));
 }
 
 int main() {

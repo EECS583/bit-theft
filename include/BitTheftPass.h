@@ -13,7 +13,8 @@ namespace llvm {
 class BitTheftPass : public PassInfoMixin<BitTheftPass> {
   public:
     static bool isCandidateCalleeFunction(const Function &F);
-    static std::optional<Align> getPointerAlign(const Value &V);
+    static std::optional<Align> getPointerAlign(const Module &M,
+                                                const Value &V);
 
     class Niche {
       protected:

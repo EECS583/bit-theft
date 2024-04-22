@@ -12,7 +12,7 @@ $(PLUGIN):
 	$(CMAKE) --build build
 
 $(TESTS:%.c=%.ll): tests/%.ll: tests/%.c
-	$(CC) -emit-llvm -S $< -O1 -o $@
+	$(CC) -O1 -S -emit-llvm $< -o $@
 
 $(TESTS:%.c=%): tests/%: tests/%.ll
 	$(CC) $< -o $@

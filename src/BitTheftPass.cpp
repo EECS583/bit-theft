@@ -37,12 +37,13 @@ bool BitTheftPass::isCandidateCalleeFunction(const Function &F) {
            });
 }
 
-std::optional<Align> BitTheftPass::getPointerAlign(const Value &V) {
+std::optional<Align> BitTheftPass::getPointerAlign(const Module &M,
+                                                   const Value &V) {
     if (!V.getType()->isPointerTy())
         return std::nullopt;
     auto alignments =
         V.users() |
-        std::views::transform([&V](const User *U) -> std::optional<Align> {
+        std::views::transform([&M, &V](const User *U) -> std::optional<Align> {
             const auto *I = dyn_cast<Instruction>(U);
             if (I == nullptr)
                 return std::nullopt;
@@ -62,11 +63,15 @@ std::optional<Align> BitTheftPass::getPointerAlign(const Value &V) {
             case Instruction::GetElementPtr: {
                 const auto *getElementPtr = dyn_cast<GetElementPtrInst>(I);
                 return (getElementPtr->getPointerOperand() == &V)
-                           ? BitTheftPass::getPointerAlign(*getElementPtr)
+                           ? std::make_optional(
+                                 M.getDataLayout()
+                                     .getStructLayout(dyn_cast<StructType>(
+                                         getElementPtr->getSourceElementType()))
+                                     ->getAlignment())
                            : std::nullopt;
             }
             case Instruction::PHI:
-                return BitTheftPass::getPointerAlign(*I);
+                return BitTheftPass::getPointerAlign(M, *I);
             default:
                 return std::nullopt;
             }
@@ -83,7 +88,9 @@ std::optional<Align> BitTheftPass::getPointerAlign(const Value &V) {
 
 BitTheftPass::Niche::Niche(const Argument &argument)
     : argument(&argument),
-      align(BitTheftPass::getPointerAlign(argument).value_or(Align())) {}
+      align(BitTheftPass::getPointerAlign(*argument.getParent()->getParent(),
+                                          argument)
+                .value_or(Align())) {}
 
 const Argument *BitTheftPass::Niche::getArgument() const noexcept {
     return this->argument;
@@ -205,7 +212,7 @@ BitTheftPass::run(Module &M, [[maybe_unused]] ModuleAnalysisManager &AM) {
                        return BitTheftPass::isCandidateCalleeFunction(f);
                    })) {
         auto binPacks = BitTheftPass::getBinPackedNiche(F);
-        auto &&[transformed, mappedArgNo] =
+        auto &&[transformed, _] =
             BitTheftPass::createTransformedFunction(F, binPacks);
         SmallVector<User *> users(F.users());
         auto *ptrIntegerTy = IntegerType::get(
