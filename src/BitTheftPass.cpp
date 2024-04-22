@@ -62,12 +62,10 @@ std::optional<Align> BitTheftPass::getPointerAlign(const Module &M,
             }
             case Instruction::GetElementPtr: {
                 const auto *getElementPtr = dyn_cast<GetElementPtrInst>(I);
+                Align align = M.getDataLayout().getABITypeAlign(
+                    getElementPtr->getSourceElementType());
                 return (getElementPtr->getPointerOperand() == &V)
-                           ? std::make_optional(
-                                 M.getDataLayout()
-                                     .getStructLayout(dyn_cast<StructType>(
-                                         getElementPtr->getSourceElementType()))
-                                     ->getAlignment())
+                           ? std::make_optional(align)
                            : std::nullopt;
             }
             case Instruction::PHI:
