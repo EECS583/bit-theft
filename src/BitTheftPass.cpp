@@ -146,7 +146,7 @@ std::vector<Argument *> BitTheftPass::getOthers(Function &F, Matching matches) {
             visited[element.original_ind] = true;
         }
     }
-    for (size_t i = 0; i < F.arg_size(); i++) {
+    for (uint32_t i = 0; i < F.arg_size(); i++) {
         if (!visited[i]) {
             others.push_back(F.getArg(i));
         }
@@ -163,8 +163,8 @@ void BitTheftPass::embedAtCaller(CallInst * callInst, Function* caller, Function
 
     for (size_t i = 0; i < matches.size(); i++) {
         auto &match = matches[i];
-        uint64_t ptrArgNo = match[0].original_ind;
-        uint64_t availableLSB = 0;
+        uint32_t ptrArgNo = match[0].original_ind;
+        uint32_t availableLSB = 0;
         errs() << "ptrArgNo: " << ptrArgNo << '\n';
         // errs() << "CallInst: " << *callInst << '\n';
         errs() << "Matches Size: " << matches.size() << '\n';
@@ -174,8 +174,8 @@ void BitTheftPass::embedAtCaller(CallInst * callInst, Function* caller, Function
         // embeddedArgs[i] = new ZExtInst(embeddedArgs[i], Type::getInt64Ty(caller->getContext()), "zext_ptr", callInst);
         // errs() << "embeddedArgs[i]: " << *embeddedArgs[i] << '\n';
         for (size_t j = 1; j < match.size(); j++) {
-            uint64_t intArgNo = match[j].original_ind;
-            uint64_t intArgBits = match[j].size;
+            uint32_t intArgNo = match[j].original_ind;
+            uint32_t intArgBits = match[j].size;
             // errs() << "intArgNo: " << *callInst->getArgOperand(intArgNo) << '\n';
             ZExtInst *ext = new ZExtInst(callInst->getArgOperand(intArgNo), Type::getInt64Ty(caller->getContext()), "zext_type", callInst);
             BinaryOperator *shl = BinaryOperator::Create(Instruction::Shl, ext, ConstantInt::get(Type::getInt64Ty(caller->getContext()), availableLSB), "shl", callInst);
@@ -219,17 +219,17 @@ Function * BitTheftPass::getEmbeddedFunc(Function &F, FunctionType *FTy, StringR
     std::vector<Value *> args(F.arg_size());
     for (size_t i = 0; i < matches.size(); i++) {
         auto &match = matches[i];
-        uint64_t ptrArgNo = match[0].original_ind;
+        uint32_t ptrArgNo = match[0].original_ind;
         // args[ptrArgNo] = builder.CreateTrunc(newFunc->arg_begin() + i, F.getArg(ptrArgNo)->getType());
-        uint64_t alignment = (1 << (match[0].size)) - 1;
+        // uint32_t alignment = (1 << (match[0].size)) - 1;
         uint64_t mask = ~((1ul << (64ul - match[0].size)) - 1ul);
         errs() << "Match 0 size" << match[0].size << '\n';
         args[ptrArgNo] = builder.CreateAnd(newFunc->arg_begin() + i, ConstantInt::get(Type::getInt64Ty(F.getContext()), mask));
         args[ptrArgNo] = builder.CreateIntToPtr(args[ptrArgNo], F.getArg(ptrArgNo)->getType());
         Value * var = newFunc->arg_begin() + i;
         for (size_t j = 1; j < match.size(); j++) {
-            uint64_t intArgNo = match[j].original_ind;
-            uint64_t intArgBits = match[j].size;
+            uint32_t intArgNo = match[j].original_ind;
+            uint32_t intArgBits = match[j].size;
             Value *trunc =
                 builder.CreateTrunc(var, F.getArg(intArgNo)->getType());
             var = builder.CreateAShr(trunc, intArgBits);

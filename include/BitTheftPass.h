@@ -11,7 +11,7 @@
 #include <vector>
 
 using Element = struct {
-    uint64_t size, original_ind;
+    uint32_t size, original_ind;
 };
 using NewArg = std::vector<Element>;
 using Matching = std::vector<NewArg>;

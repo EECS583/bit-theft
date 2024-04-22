@@ -23,4 +23,4 @@ tests/%.steal.bin: tests/%.steal.bc
 	$(CC) $< -o $@
 
 clean:
-	rm -f tests/*.bc tests/*.ll
+	rm -f tests/*.bc tests/*.ll tests/*.bin
