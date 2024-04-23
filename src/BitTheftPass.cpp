@@ -22,7 +22,7 @@
 namespace llvm {
 
 bool BitTheftPass::isCandidateCalleeFunction(const Function &F) {
-    return !F.isIntrinsic() && !F.isDeclaration() &&
+    return !F.isIntrinsic() && !F.isDeclaration() && !F.hasOptNone() &&
            find_if(F.args(),
                    [](const Argument &argument) {
                        return argument.getType()->isPointerTy();
@@ -226,6 +226,8 @@ BitTheftPass::run(Module &M, [[maybe_unused]] ModuleAnalysisManager &AM) {
             F.getParent()->getDataLayout().getPointerSizeInBits());
         for (auto *U : users) {
             auto *I = dyn_cast<CallInst>(U);
+            if (I->getParent()->getParent()->hasOptNone())
+                continue;
             SmallVector<Value *> embeddedArgs;
             for (const auto &[niche, thieves] : binPacks) {
                 auto *ptr = I->getArgOperand(niche.getArgument()->getArgNo());
@@ -262,7 +264,7 @@ BitTheftPass::run(Module &M, [[maybe_unused]] ModuleAnalysisManager &AM) {
             I->eraseFromParent();
         }
     }
-    return PreservedAnalyses::all();
+    return PreservedAnalyses::none();
 }
 
 } // namespace llvm

@@ -11,7 +11,7 @@ typedef struct Tree {
     struct Tree *right;
 } Tree;
 
-static Tree *generate_random_tree(size_t n) {
+Tree *generate_random_tree(size_t n) {
     if (n == 0)
         return NULL;
     Tree *tree = (Tree *)calloc(1, sizeof(Tree));
@@ -34,7 +34,7 @@ static Tree *generate_random_tree(size_t n) {
     return tree;
 }
 
-static void free_tree(Tree *tree) {
+void free_tree(Tree *tree) {
     if (tree == NULL)
         return;
     free_tree(tree->left);
@@ -42,13 +42,13 @@ static void free_tree(Tree *tree) {
     free(tree);
 }
 
-static bool is_alternating(const Tree *tree, bool last) {
+bool is_alternating(const Tree *tree, bool last) {
     return tree == NULL ||
            (last != tree->value && is_alternating(tree->left, tree->value) &&
             is_alternating(tree->right, tree->value));
 }
 
-bool is_alternating_ref(const Tree *tree, bool last) {
+__attribute__((optnone)) bool is_alternating_ref(const Tree *tree, bool last) {
     return tree == NULL || (last != tree->value &&
                             is_alternating_ref(tree->left, tree->value) &&
                             is_alternating_ref(tree->right, tree->value));

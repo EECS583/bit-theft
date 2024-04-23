@@ -10,7 +10,7 @@ typedef struct List {
     struct List *next;
 } List;
 
-static List *generate_random_list(size_t n) {
+List *generate_random_list(size_t n) {
     if (n == 0)
         return NULL;
     List *node = (List *)calloc(1, sizeof(List));
@@ -19,15 +19,15 @@ static List *generate_random_list(size_t n) {
     return node;
 }
 
-static void free_list(List *list) {
+void free_list(List *list) {
     if (list == NULL)
         return;
     free_list(list->next);
     free(list);
 }
 
-static size_t count_rising_edge(const List *list, size_t rising_edges,
-                                bool last_value) {
+size_t count_rising_edge(const List *list, size_t rising_edges,
+                         bool last_value) {
     return list ? count_rising_edge(list->next,
                                     rising_edges +
                                         ((!last_value && list->value) ? 1 : 0),
@@ -35,8 +35,8 @@ static size_t count_rising_edge(const List *list, size_t rising_edges,
                 : rising_edges;
 }
 
-size_t count_rising_edge_ref(const List *list, size_t rising_edges,
-                             bool last_value) {
+__attribute__((optnone)) size_t
+count_rising_edge_ref(const List *list, size_t rising_edges, bool last_value) {
     return list ? count_rising_edge_ref(
                       list->next,
                       rising_edges + ((!last_value && list->value) ? 1 : 0),
