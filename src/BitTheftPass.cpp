@@ -228,7 +228,6 @@ BitTheftPass::run(Module &M, [[maybe_unused]] ModuleAnalysisManager &AM) {
             continue;
         auto &&[transformed, _] =
             BitTheftPass::createTransformedFunction(*F, binPacks);
-        candidates.push_back(transformed);
         SmallVector<User *> users(F->users());
         auto *ptrIntegerTy = IntegerType::get(
             F->getContext(),
