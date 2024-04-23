@@ -14,7 +14,7 @@
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 
-#include <algorithm>
+#include <numeric>
 #include <ranges>
 
 #define DEBUG_TYPE "bit-theft"
@@ -78,10 +78,14 @@ std::optional<Align> BitTheftPass::getPointerAlign(const DataLayout &L,
             [](std::optional<Align> align) { return align.has_value(); }) |
         std::views::transform(
             [](std::optional<Align> align) { return align.value(); });
-    return std::ranges::fold_left_first(alignments,
-                                        [](Align accumulator, Align align) {
-                                            return std::min(accumulator, align);
-                                        });
+    if (alignments.empty())
+        return std::nullopt;
+    else
+        return std::reduce(alignments.begin(), alignments.end(),
+                           *alignments.begin(),
+                           [](Align accumulator, Align align) {
+                               return std::min(accumulator, align);
+                           });
 }
 
 BitTheftPass::Niche::Niche(const Argument &argument)
@@ -121,13 +125,15 @@ BitTheftPass::getBinPackedNiche(const Function &F) {
         auto bits_needed =
             static_cast<uint8_t>(thief.getType()->getIntegerBitWidth());
         for (auto &[niche, thieves] : bins) {
-            auto occupied_bits = std::ranges::fold_left(
-                thieves, static_cast<uint8_t>(0),
-                [](uint8_t accumulator, const Argument *argument) -> uint8_t {
-                    return accumulator +
-                           static_cast<uint8_t>(
-                               argument->getType()->getIntegerBitWidth());
+            auto thief_width =
+                thieves |
+                std::views::transform([](const Argument *argument) -> uint8_t {
+                    return static_cast<uint8_t>(
+                        argument->getType()->getIntegerBitWidth());
                 });
+            auto occupied_bits =
+                std::reduce(thief_width.begin(), thief_width.end(),
+                            static_cast<uint8_t>(0));
             if (bits_needed + occupied_bits <= Log2(niche.getAlign())) {
                 thieves.push_back(&thief);
                 break;
