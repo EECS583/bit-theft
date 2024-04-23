@@ -13,7 +13,7 @@ namespace llvm {
 class BitTheftPass : public PassInfoMixin<BitTheftPass> {
   public:
     static bool isCandidateCalleeFunction(const Function &F);
-    static std::optional<Align> getPointerAlign(const Module &M,
+    static std::optional<Align> getPointerAlign(const DataLayout &L,
                                                 const Value &V);
 
     class Niche {
@@ -31,8 +31,6 @@ class BitTheftPass : public PassInfoMixin<BitTheftPass> {
     using BinPack = std::pair<Niche, SmallVector<const Argument *>>;
 
     static SmallVector<BinPack> getBinPackedNiche(const Function &F);
-    static bool isNiche(const SmallVector<BinPack> &binPacks, const Value &V);
-    static bool isThief(const SmallVector<BinPack> &binPacks, const Value &V);
     static std::pair<Function *, SmallVector<unsigned int>>
     createTransformedFunction(
         Function &F, const SmallVector<BitTheftPass::BinPack> &binPacks);

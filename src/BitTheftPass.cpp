@@ -22,7 +22,7 @@
 namespace llvm {
 
 bool BitTheftPass::isCandidateCalleeFunction(const Function &F) {
-    return F.hasInternalLinkage() && !F.isIntrinsic() && !F.isDeclaration() &&
+    return !F.isIntrinsic() && !F.isDeclaration() &&
            find_if(F.args(),
                    [](const Argument &argument) {
                        return argument.getType()->isPointerTy();
@@ -30,20 +30,20 @@ bool BitTheftPass::isCandidateCalleeFunction(const Function &F) {
            find_if(F.args(),
                    [](const Argument &argument) {
                        return argument.getType()->isIntegerTy() &&
-                              argument.getType()->getIntegerBitWidth() <= 4;
+                              argument.getType()->getIntegerBitWidth() < 8;
                    }) != F.args().end() &&
            std::all_of(F.users().begin(), F.users().end(), [](const User *U) {
                return dyn_cast<CallInst>(U) != nullptr;
            });
 }
 
-std::optional<Align> BitTheftPass::getPointerAlign(const Module &M,
+std::optional<Align> BitTheftPass::getPointerAlign(const DataLayout &L,
                                                    const Value &V) {
     if (!V.getType()->isPointerTy())
         return std::nullopt;
     auto alignments =
         V.users() |
-        std::views::transform([&M, &V](const User *U) -> std::optional<Align> {
+        std::views::transform([&L, &V](const User *U) -> std::optional<Align> {
             const auto *I = dyn_cast<Instruction>(U);
             if (I == nullptr)
                 return std::nullopt;
@@ -62,14 +62,14 @@ std::optional<Align> BitTheftPass::getPointerAlign(const Module &M,
             }
             case Instruction::GetElementPtr: {
                 const auto *getElementPtr = dyn_cast<GetElementPtrInst>(I);
-                Align align = M.getDataLayout().getABITypeAlign(
-                    getElementPtr->getSourceElementType());
+                Align align =
+                    L.getABITypeAlign(getElementPtr->getSourceElementType());
                 return (getElementPtr->getPointerOperand() == &V)
                            ? std::make_optional(align)
                            : std::nullopt;
             }
             case Instruction::PHI:
-                return BitTheftPass::getPointerAlign(M, *I);
+                return BitTheftPass::getPointerAlign(L, *I);
             default:
                 return std::nullopt;
             }
@@ -86,8 +86,8 @@ std::optional<Align> BitTheftPass::getPointerAlign(const Module &M,
 
 BitTheftPass::Niche::Niche(const Argument &argument)
     : argument(&argument),
-      align(BitTheftPass::getPointerAlign(*argument.getParent()->getParent(),
-                                          argument)
+      align(BitTheftPass::getPointerAlign(
+                argument.getParent()->getParent()->getDataLayout(), argument)
                 .value_or(Align())) {}
 
 const Argument *BitTheftPass::Niche::getArgument() const noexcept {
@@ -166,6 +166,9 @@ BitTheftPass::createTransformedFunction(
         FunctionType::get(F.getReturnType(), argumentTypes, F.isVarArg());
     auto *transformed =
         Function::Create(FTy, F.getLinkage(), "", F.getParent());
+    transformed->setLinkage(GlobalValue::InternalLinkage);
+    transformed->setCallingConv(CallingConv::Fast);
+    transformed->setName(F.getName().str() + ".bit_theft");
     auto *prefix = BasicBlock::Create(F.getContext(), "", transformed);
     ValueToValueMapTy VMap;
     IRBuilder<> builder(prefix);
@@ -205,7 +208,6 @@ BitTheftPass::createTransformedFunction(
 
 PreservedAnalyses
 BitTheftPass::run(Module &M, [[maybe_unused]] ModuleAnalysisManager &AM) {
-    SmallVector<Function *> appliedFunctions;
     for (auto &F : M.functions() | std::views::filter([](const Function &f) {
                        return BitTheftPass::isCandidateCalleeFunction(f);
                    })) {
@@ -253,10 +255,7 @@ BitTheftPass::run(Module &M, [[maybe_unused]] ModuleAnalysisManager &AM) {
             I->replaceAllUsesWith(call);
             I->eraseFromParent();
         }
-        appliedFunctions.push_back(&F);
     }
-    for (Function *F : appliedFunctions)
-        F->eraseFromParent();
     return PreservedAnalyses::all();
 }
 
