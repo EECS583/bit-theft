@@ -10,7 +10,7 @@ FLAGS = -lm
 
 .PHONY: $(PLUGIN)
 $(PLUGIN):
-	$(CMAKE) --build build
+	$(CMAKE) --build build -j2
 
 $(TESTS:%.c=%.ll): tests/%.ll: tests/%.c
 	$(CC) -O1 -S -emit-llvm $< -o $@
