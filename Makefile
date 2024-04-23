@@ -6,6 +6,7 @@ CMAKE := cmake
 
 PLUGIN = build/PassPlugin.so
 TESTS = $(wildcard tests/*.c)
+FLAGS = -lm
 
 .PHONY: $(PLUGIN)
 $(PLUGIN):
@@ -21,7 +22,7 @@ $(TESTS:%.c=%.bit_theft.bc): tests/%.bit_theft.bc: tests/%.ll $(PLUGIN)
 	$(OPT) -load-pass-plugin="${PLUGIN}" -passes='bit-theft' $< -o $@
 
 $(TESTS:%.c=%.bit_theft): tests/%.bit_theft: tests/%.bit_theft.bc
-	$(CC) $< -o $@
+	$(CC) $< -o $@ ${FLAGS}
 
 $(TESTS:%.c=%.bit_theft.ll): tests/%.bit_theft.ll: tests/%.bit_theft.bc
 	$(DIS) $< -o $@
