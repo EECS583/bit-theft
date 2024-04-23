@@ -218,13 +218,14 @@ BitTheftPass::run(Module &M, [[maybe_unused]] ModuleAnalysisManager &AM) {
                       return isCandidateCalleeFunction(F);
                   }) |
                   std::views::transform([](Function &F) { return &F; });
-    SmallVector<Function *> cadidates(callee.begin(), callee.end());
-    for (Function *F : cadidates) {
+    SmallVector<Function *> candidates(callee.begin(), callee.end());
+    for (Function *F : candidates) {
         auto binPacks = BitTheftPass::getBinPackedNiche(*F);
         if (binPacks.empty())
             continue;
         auto &&[transformed, _] =
             BitTheftPass::createTransformedFunction(*F, binPacks);
+        candidates.push_back(transformed);
         SmallVector<User *> users(F->users());
         auto *ptrIntegerTy = IntegerType::get(
             F->getContext(),
@@ -247,7 +248,8 @@ BitTheftPass::run(Module &M, [[maybe_unused]] ModuleAnalysisManager &AM) {
                             ? static_cast<Value *>(extended)
                             : BinaryOperator::CreateShl(
                                   extended,
-                                  ConstantInt::get(ptrIntegerTy, offset));
+                                  ConstantInt::get(ptrIntegerTy, offset), "",
+                                  I);
                     casted = BinaryOperator::CreateOr(casted, shifted, "", I);
                     offset += thief->getType()->getIntegerBitWidth();
                 }
