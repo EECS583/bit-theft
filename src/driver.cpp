@@ -1,4 +1,5 @@
 #include "BitTheftPass.h"
+#include "IntegerBitTheftPass.h"
 
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/Passes/PassPlugin.h>
@@ -20,6 +21,9 @@ llvmGetPassPluginInfo() {
                             MPM.addPass(createModuleToFunctionPassAdaptor(
                                 SimplifyCFGPass()));
                             MPM.addPass(BitTheftPass());
+                            MPM.addPass(createModuleToFunctionPassAdaptor(
+                                SimplifyCFGPass()));
+                            MPM.addPass(IntegerBitTheftPass());
                             MPM.addPass(createModuleToFunctionPassAdaptor(
                                 SimplifyCFGPass()));
                             return true;

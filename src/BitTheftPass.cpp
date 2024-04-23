@@ -21,20 +21,39 @@
 
 namespace llvm {
 
+BitTheftPass::Niche::Niche(const Argument &argument)
+    : argument(&argument),
+      align(BitTheftPass::getPointerAlign(
+                argument.getParent()->getParent()->getDataLayout(), argument)
+                .value_or(Align())) {}
+
+const Argument *BitTheftPass::Niche::getArgument() const noexcept {
+    return this->argument;
+}
+
+Align BitTheftPass::Niche::getAlign() const noexcept { return this->align; }
+
 bool BitTheftPass::isCandidateCalleeFunction(const Function &F) {
     return !F.isIntrinsic() && !F.isDeclaration() && !F.hasOptNone() &&
+           std::all_of(F.users().begin(), F.users().end(),
+                       [](const User *U) {
+                           return dyn_cast<CallInst>(U) != nullptr;
+                       }) &&
            find_if(F.args(),
                    [](const Argument &argument) {
                        return argument.getType()->isPointerTy();
                    }) != F.args().end() &&
-           find_if(F.args(),
-                   [](const Argument &argument) {
-                       return argument.getType()->isIntegerTy() &&
-                              argument.getType()->getIntegerBitWidth() < 8;
-                   }) != F.args().end() &&
-           std::all_of(F.users().begin(), F.users().end(), [](const User *U) {
-               return dyn_cast<CallInst>(U) != nullptr;
-           });
+           find_if(F.args(), [](const Argument &argument) {
+               return argument.getType()->isIntegerTy() &&
+                      argument.getType()->getIntegerBitWidth() < 8;
+           }) != F.args().end();
+}
+
+SmallVector<Function *>
+BitTheftPass::createCandidateFunctionSnapshot(Module &M) {
+    auto fs = M.functions() | std::views::filter(isCandidateCalleeFunction) |
+              std::views::transform([](Function &F) { return &F; });
+    return SmallVector<Function *>(fs.begin(), fs.end());
 }
 
 std::optional<Align> BitTheftPass::getPointerAlign(const DataLayout &L,
@@ -87,18 +106,6 @@ std::optional<Align> BitTheftPass::getPointerAlign(const DataLayout &L,
                                return std::min(accumulator, align);
                            });
 }
-
-BitTheftPass::Niche::Niche(const Argument &argument)
-    : argument(&argument),
-      align(BitTheftPass::getPointerAlign(
-                argument.getParent()->getParent()->getDataLayout(), argument)
-                .value_or(Align())) {}
-
-const Argument *BitTheftPass::Niche::getArgument() const noexcept {
-    return this->argument;
-}
-
-Align BitTheftPass::Niche::getAlign() const noexcept { return this->align; }
 
 SmallVector<BitTheftPass::BinPack>
 BitTheftPass::getBinPackedNiche(const Function &F) {
@@ -214,11 +221,7 @@ BitTheftPass::createTransformedFunction(
 
 PreservedAnalyses
 BitTheftPass::run(Module &M, [[maybe_unused]] ModuleAnalysisManager &AM) {
-    auto callee = M.functions() | std::views::filter([](Function &F) {
-                      return isCandidateCalleeFunction(F);
-                  }) |
-                  std::views::transform([](Function &F) { return &F; });
-    SmallVector<Function *> candidates(callee.begin(), callee.end());
+    auto candidates = createCandidateFunctionSnapshot(M);
     for (Function *F : candidates) {
         auto binPacks = BitTheftPass::getBinPackedNiche(*F);
         if (binPacks.empty())

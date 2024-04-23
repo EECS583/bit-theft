@@ -22,4 +22,4 @@ add_definitions(${LLVM_DEFINITIONS_LIST})
 include_directories(${LLVM_INCLUDE_DIRS})
 
 include_directories(include)
-add_llvm_pass_plugin(PassPlugin src/BitTheftPass.cpp src/driver.cpp)
+add_llvm_pass_plugin(PassPlugin src/BitTheftPass.cpp src/IntegerBitTheftPass.cpp src/driver.cpp)
