@@ -110,6 +110,7 @@ IntegerBitTheftPass::run(Module &M,
     for (Function *F : candidates) {
         auto &&[transformed, _] =
             IntegerBitTheftPass::createTransformedFunction(*F);
+        candidates.push_back(transformed);
         SmallVector<User *> users(F->users());
         for (auto *U : users) {
             auto *I = dyn_cast<CallInst>(U);
@@ -141,7 +142,6 @@ IntegerBitTheftPass::run(Module &M,
             I->replaceAllUsesWith(call);
             I->eraseFromParent();
         }
-        errs() << M << '\n';
     }
     return PreservedAnalyses::none();
 }
