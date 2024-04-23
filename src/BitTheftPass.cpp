@@ -110,7 +110,7 @@ BitTheftPass::getBinPackedNiche(const Function &F) {
     auto thieves = F.args() | std::views::filter([](const Argument &argument) {
                        const auto *intTy =
                            dyn_cast<IntegerType>(argument.getType());
-                       return intTy != nullptr && intTy->getBitWidth() <= 4;
+                       return intTy != nullptr && intTy->getBitWidth() < 8;
                    });
 
     SmallVector<BinPack> bins;
