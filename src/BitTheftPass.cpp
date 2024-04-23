@@ -214,16 +214,21 @@ BitTheftPass::createTransformedFunction(
 
 PreservedAnalyses
 BitTheftPass::run(Module &M, [[maybe_unused]] ModuleAnalysisManager &AM) {
-    for (auto &F : M.functions() | std::views::filter([](const Function &f) {
-                       return BitTheftPass::isCandidateCalleeFunction(f);
-                   })) {
-        auto binPacks = BitTheftPass::getBinPackedNiche(F);
+    auto callee = M.functions() | std::views::filter([](Function &F) {
+                      return isCandidateCalleeFunction(F);
+                  }) |
+                  std::views::transform([](Function &F) { return &F; });
+    SmallVector<Function *> cadidates(callee.begin(), callee.end());
+    for (Function *F : cadidates) {
+        auto binPacks = BitTheftPass::getBinPackedNiche(*F);
+        if (binPacks.empty())
+            continue;
         auto &&[transformed, _] =
-            BitTheftPass::createTransformedFunction(F, binPacks);
-        SmallVector<User *> users(F.users());
+            BitTheftPass::createTransformedFunction(*F, binPacks);
+        SmallVector<User *> users(F->users());
         auto *ptrIntegerTy = IntegerType::get(
-            F.getContext(),
-            F.getParent()->getDataLayout().getPointerSizeInBits());
+            F->getContext(),
+            F->getParent()->getDataLayout().getPointerSizeInBits());
         for (auto *U : users) {
             auto *I = dyn_cast<CallInst>(U);
             if (I->getParent()->getParent()->hasOptNone())
@@ -250,7 +255,7 @@ BitTheftPass::run(Module &M, [[maybe_unused]] ModuleAnalysisManager &AM) {
                                        "", I);
                 embeddedArgs.push_back(ptr);
             }
-            for (const Argument &argument : F.args()) {
+            for (const Argument &argument : F->args()) {
                 if (find_if(binPacks,
                             [&argument](const BitTheftPass::BinPack &pack) {
                                 return pack.first.getArgument() == &argument ||
