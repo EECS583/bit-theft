@@ -22,8 +22,7 @@
 namespace llvm {
 
 bool IntegerBitTheftPass::isThief(const Value &V) {
-    return V.getType()->isIntegerTy() &&
-           V.getType()->getIntegerBitWidth() % 8 != 0;
+    return V.getType()->isIntegerTy() && V.getType()->getIntegerBitWidth() < 64;
 }
 
 bool IntegerBitTheftPass::isCandidateCalleeFunction(const Function &F) {
