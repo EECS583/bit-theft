@@ -57,8 +57,7 @@ IntegerBitTheftPass::createTransformedFunction(Function &F) {
     SmallVector<unsigned int> mappedArgNo(
         F.arg_size(), static_cast<unsigned int>(F.arg_size()));
     for (const Argument &argument : F.args()) {
-        if (argument.getType()->isIntegerTy() &&
-            argument.getType()->getIntegerBitWidth() % 8 != 0) {
+        if (isThief(argument)) {
             mappedArgNo[argument.getArgNo()] = 0;
         } else {
             mappedArgNo[argument.getArgNo()] =
@@ -98,7 +97,7 @@ IntegerBitTheftPass::createTransformedFunction(Function &F) {
     SmallVector<ReturnInst *, 8> _;
     CloneFunctionInto(transformed, &F, VMap,
                       CloneFunctionChangeType::LocalChangesOnly, _,
-                      ".bit_theft");
+                      ".integer_bit_theft");
     builder.CreateBr(dyn_cast<BasicBlock>(VMap[&(F.getEntryBlock())]));
     return std::make_pair(transformed, mappedArgNo);
 }
