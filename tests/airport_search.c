@@ -2,6 +2,7 @@
 #include <malloc.h>
 #include <memory.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 
 bool getVisited(bool *visited, int x, int y, bool isArrivalLayer, int N) {
@@ -19,8 +20,8 @@ void setMap(int *map, int x, int y, int N, int value) {
 }
 
 // Map value 0 means empty, 1 means obstacle, 2 means elevator, 3 means arrival
-bool find(int *map, bool *visited, int x, int y, bool isArrivalLayer, int N,
-          int depth) {
+bool find(int *map, bool *visited, int64_t x, int64_t y, bool isArrivalLayer,
+          int64_t N, int64_t depth) {
     if (x < 0 || x >= N || y < 0 || y >= N ||
         getVisited(visited, x, y, isArrivalLayer, N) ||
         getMap(map, x, y, N) == 1) {
@@ -43,16 +44,9 @@ bool find(int *map, bool *visited, int x, int y, bool isArrivalLayer, int N,
 }
 
 int main() {
-    int N = 0;
-    scanf("%d", &N);
-    int *map = (int *)malloc(N * N * sizeof(int));
-    bool *visited = (bool *)malloc(2 * N * N * sizeof(bool));
-    memset(visited, 0, 2 * N * N * sizeof(bool));
-    for (int i = 0; i < N; i++) {
-        for (int j = 0; j < N; j++) {
-            scanf("%d", &map[i * N + j]);
-        }
-    }
+    const unsigned int N = 1024;
+    int *map = (int *)calloc(N * N, sizeof(int));
+    bool *visited = (bool *)calloc(2 * N * N, sizeof(bool));
     if (!find(map, visited, 0, 0, true, N, 0)) {
         printf("No path found\n");
     }
