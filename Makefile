@@ -16,13 +16,13 @@ $(TESTS:%.c=%.ll): tests/%.ll: tests/%.c
 	$(CC) -O1 -S -emit-llvm $< -o $@
 
 $(TESTS:%.c=%): tests/%: tests/%.ll
-	$(CC) -O1 $< -o $@
+	$(CC) -O1 $< -o $@ -lm
 
 $(TESTS:%.c=%.bit_theft.bc): tests/%.bit_theft.bc: tests/%.ll $(PLUGIN)
 	$(OPT) -load-pass-plugin="${PLUGIN}" -passes='bit-theft' $< -o $@
 
 $(TESTS:%.c=%.bit_theft): tests/%.bit_theft: tests/%.bit_theft.bc
-	$(CC) -O1 $< -o $@ ${FLAGS}
+	$(CC) -O1 $< -o $@ ${FLAGS} -lm
 
 $(TESTS:%.c=%.bit_theft.ll): tests/%.bit_theft.ll: tests/%.bit_theft.bc
 	$(DIS) $< -o $@
