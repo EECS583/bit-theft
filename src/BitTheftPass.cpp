@@ -43,10 +43,12 @@ bool BitTheftPass::isCandidateCalleeFunction(const Function &F) {
                    [](const Argument &argument) {
                        return argument.getType()->isPointerTy();
                    }) != F.args().end() &&
-           find_if(F.args(), [](const Argument &argument) {
-               return argument.getType()->isIntegerTy() &&
-                      argument.getType()->getIntegerBitWidth() < 8;
-           }) != F.args().end();
+           find_if(F.args(),
+                   [](const Argument &argument) {
+                       return argument.getType()->isIntegerTy() &&
+                              argument.getType()->getIntegerBitWidth() < 8;
+                   }) != F.args().end() &&
+           F.arg_size() >= 7;
 }
 
 SmallVector<Function *>

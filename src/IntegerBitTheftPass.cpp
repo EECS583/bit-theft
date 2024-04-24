@@ -32,7 +32,7 @@ bool IntegerBitTheftPass::isCandidateCalleeFunction(const Function &F) {
                        [](const User *U) {
                            return dyn_cast<CallInst>(U) != nullptr;
                        }) &&
-           count_if(F.args(), isThief) > 1;
+           count_if(F.args(), isThief) > 1 && F.arg_size() >= 7;
 }
 
 SmallVector<Function *>
