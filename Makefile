@@ -13,16 +13,16 @@ $(PLUGIN):
 	$(CMAKE) --build build -j2
 
 $(TESTS:%.c=%.ll): tests/%.ll: tests/%.c
-	$(CC) -Os -S -emit-llvm $< -o $@
+	$(CC) -O1 -S -emit-llvm $< -o $@
 
 $(TESTS:%.c=%): tests/%: tests/%.ll
-	$(CC) $< -o $@
+	$(CC) -O1 $< -o $@
 
 $(TESTS:%.c=%.bit_theft.bc): tests/%.bit_theft.bc: tests/%.ll $(PLUGIN)
 	$(OPT) -load-pass-plugin="${PLUGIN}" -passes='bit-theft' $< -o $@
 
 $(TESTS:%.c=%.bit_theft): tests/%.bit_theft: tests/%.bit_theft.bc
-	$(CC) -Os $< -o $@ ${FLAGS}
+	$(CC) -O1 $< -o $@ ${FLAGS}
 
 $(TESTS:%.c=%.bit_theft.ll): tests/%.bit_theft.ll: tests/%.bit_theft.bc
 	$(DIS) $< -o $@
