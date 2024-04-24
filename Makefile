@@ -15,7 +15,7 @@ $(PLUGIN):
 	$(CMAKE) --build build -j2
 
 $(TESTS:%.c=%.bc): tests/%.bc: tests/%.c
-	$(CC) -S -emit-llvm ${CFLAGS} $< -o $@
+	$(CC) -c -emit-llvm ${CFLAGS} $< -o $@
 
 $(TESTS:%.c=%): tests/%: tests/%.bc
 	$(CC) ${CFLAGS} $< -o $@
