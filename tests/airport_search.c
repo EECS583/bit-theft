@@ -44,11 +44,15 @@ bool find(int *map, bool *visited, int64_t x, int64_t y, bool isArrivalLayer,
 }
 
 int main() {
-    const unsigned int N = 1024;
+    const unsigned int N = 128;
     int *map = (int *)calloc(N * N, sizeof(int));
-    bool *visited = (bool *)calloc(2 * N * N, sizeof(bool));
-    if (!find(map, visited, 0, 0, true, N, 0)) {
-        printf("No path found\n");
+    for (unsigned int i = 0; i < 10000; i++) {
+        bool *visited = (bool *)calloc(2 * N * N, sizeof(bool));
+        if (!find(map, visited, 0, 0, true, N, 0)) {
+            // printf("No path found\n");
+        }
+        free(visited);
     }
+    free(map);
     return 0;
 }
