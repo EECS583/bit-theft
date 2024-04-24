@@ -2,31 +2,36 @@ CC := clang
 CXX := clang++
 OPT := opt
 DIS := llvm-dis
+DUMP := objdump
 CMAKE := cmake
+
+CFLAGS := -std=c17 -Wall -O1 -lm
 
 PLUGIN = build/PassPlugin.so
 TESTS = $(wildcard tests/*.c)
-FLAGS = -lm
 
 .PHONY: $(PLUGIN)
 $(PLUGIN):
 	$(CMAKE) --build build -j2
 
-$(TESTS:%.c=%.ll): tests/%.ll: tests/%.c
-	$(CC) -O1 -S -emit-llvm $< -o $@
+$(TESTS:%.c=%.bc): tests/%.bc: tests/%.c
+	$(CC) -S -emit-llvm ${CFLAGS} $< -o $@
 
-$(TESTS:%.c=%): tests/%: tests/%.ll
-	$(CC) -O1 $< -o $@ -lm
+$(TESTS:%.c=%): tests/%: tests/%.bc
+	$(CC) ${CFLAGS} $< -o $@
 
-$(TESTS:%.c=%.bit_theft.bc): tests/%.bit_theft.bc: tests/%.ll $(PLUGIN)
+$(TESTS:%.c=%.bit_theft.bc): tests/%.bit_theft.bc: tests/%.bc $(PLUGIN)
 	$(OPT) -load-pass-plugin="${PLUGIN}" -passes='bit-theft' $< -o $@
 
 $(TESTS:%.c=%.bit_theft): tests/%.bit_theft: tests/%.bit_theft.bc
-	$(CC) -O1 $< -o $@ ${FLAGS} -lm
+	$(CC) ${CFLAGS} $< -o $@
 
-$(TESTS:%.c=%.bit_theft.ll): tests/%.bit_theft.ll: tests/%.bit_theft.bc
+%.ll: %.bc
 	$(DIS) $< -o $@
+
+%.lst: %
+	$(DUMP) -d $< > $@
 
 .PHONY: clean
 clean:
-	rm -f tests/*.bc tests/*.ll tests/*.bit_theft $(TESTS:%.c=%)
+	find tests -type f -not -name '*.c' -delete
