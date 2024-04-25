@@ -9,20 +9,22 @@ int getCounter(int *counters, int x, int y, int N) {
 
 void setCounter(int *counters, int x, int y, int N) { counters[x * N + y]++; }
 
+int result = 0;
 void walk(int *counters, int x, int y, int N, int depth, bool goVerticle,
           bool goHorizontal, uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4, uint64_t a5, uint64_t a6) {
     x = x % N;
     y = y % N;
     setCounter(counters, x, y, N);
     if (depth == 1000) {
+        result += x + y;
         // Print out the entire counter array
-        printf("\n=====================\n");
-        for (int i = 0; i < N; i++) {
-            for (int j = 0; j < N; j++) {
-                printf("%d ", getCounter(counters, i, j, N));
-            }
-            printf("\n");
-        }
+        // printf("\n=====================\n");
+        // for (int i = 0; i < N; i++) {
+        //     for (int j = 0; j < N; j++) {
+        //         printf("%d ", getCounter(counters, i, j, N));
+        //     }
+        //     printf("\n");
+        // }
 
         return;
     }
@@ -46,8 +48,8 @@ void walk(int *counters, int x, int y, int N, int depth, bool goVerticle,
 
 int main() {
     srand(10);
-    int N = 0;
-    scanf("%d", &N);
+    int N = 8;
     int *counters = (int *)malloc(N * N * sizeof(int));
     walk(counters, N / 2, N / 2, N, 0, 1, 1, 1, 2, 3, 4, 5, 6);
+    printf("%d", result);
 }
