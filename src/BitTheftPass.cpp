@@ -167,8 +167,9 @@ BitTheftPass::createTransformedFunction(
         for (const auto *thief : thieves)
             mappedArgNo[thief->getArgNo()] =
                 static_cast<unsigned int>(argumentTypes.size());
-        argumentTypes.push_back(
-            PointerType::get(F.getContext(), F.getAddressSpace()));
+        argumentTypes.push_back(IntegerType::get(
+            F.getContext(), F.getParent()->getDataLayout().getPointerSizeInBits(
+                                F.getAddressSpace())));
     }
     for (const Argument &argument : F.args()) {
         if (mappedArgNo[argument.getArgNo()] == F.arg_size()) {
@@ -181,18 +182,13 @@ BitTheftPass::createTransformedFunction(
         FunctionType::get(F.getReturnType(), argumentTypes, F.isVarArg());
     auto *transformed =
         Function::Create(FTy, F.getLinkage(), "", F.getParent());
-    transformed->setLinkage(GlobalValue::InternalLinkage);
-    transformed->setCallingConv(CallingConv::Fast);
     transformed->setName(F.getName().str() + ".bit_theft");
     auto *prefix = BasicBlock::Create(F.getContext(), "", transformed);
     ValueToValueMapTy VMap;
     IRBuilder<> builder(prefix);
     for (const auto &[niche, thieves] : binPacks) {
-        auto *casted = builder.CreatePtrToInt(
-            transformed->getArg(mappedArgNo[niche.getArgument()->getArgNo()]),
-            IntegerType::get(
-                F.getContext(),
-                F.getParent()->getDataLayout().getPointerSizeInBits()));
+        auto *casted =
+            transformed->getArg(mappedArgNo[niche.getArgument()->getArgNo()]);
         auto *ptrInt =
             builder.CreateAnd(casted, ~(niche.getAlign().value() - 1));
         auto *ptr =
@@ -217,6 +213,7 @@ BitTheftPass::createTransformedFunction(
     CloneFunctionInto(transformed, &F, VMap,
                       CloneFunctionChangeType::LocalChangesOnly, _,
                       ".bit_theft");
+    transformed->setLinkage(GlobalValue::InternalLinkage);
     builder.CreateBr(dyn_cast<BasicBlock>(VMap[&(F.getEntryBlock())]));
     return std::make_pair(transformed, mappedArgNo);
 }
@@ -231,9 +228,7 @@ BitTheftPass::run(Module &M, [[maybe_unused]] ModuleAnalysisManager &AM) {
         auto &&[transformed, _] =
             BitTheftPass::createTransformedFunction(*F, binPacks);
         SmallVector<User *> users(F->users());
-        auto *ptrIntegerTy = IntegerType::get(
-            F->getContext(),
-            F->getParent()->getDataLayout().getPointerSizeInBits());
+
         for (auto *U : users) {
             auto *I = dyn_cast<CallInst>(U);
             if (I->getParent()->getParent()->hasOptNone())
@@ -241,6 +236,10 @@ BitTheftPass::run(Module &M, [[maybe_unused]] ModuleAnalysisManager &AM) {
             SmallVector<Value *> embeddedArgs;
             for (const auto &[niche, thieves] : binPacks) {
                 auto *ptr = I->getArgOperand(niche.getArgument()->getArgNo());
+                auto *ptrIntegerTy = IntegerType::get(
+                    F->getContext(),
+                    F->getParent()->getDataLayout().getPointerSizeInBits(
+                        ptr->getType()->getPointerAddressSpace()));
                 Value *casted = new PtrToIntInst(ptr, ptrIntegerTy, "", I);
                 unsigned int offset = 0;
                 for (const Argument *thief : thieves) {
@@ -257,9 +256,7 @@ BitTheftPass::run(Module &M, [[maybe_unused]] ModuleAnalysisManager &AM) {
                     casted = BinaryOperator::CreateOr(casted, shifted, "", I);
                     offset += thief->getType()->getIntegerBitWidth();
                 }
-                ptr = new IntToPtrInst(casted, niche.getArgument()->getType(),
-                                       "", I);
-                embeddedArgs.push_back(ptr);
+                embeddedArgs.push_back(casted);
             }
             for (const Argument &argument : F->args()) {
                 if (find_if(binPacks,

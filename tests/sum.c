@@ -28,6 +28,6 @@ int main() {
             (uint64_t)rand(), (uint64_t)rand());
         everything += sigma;
     }
-    printf("The strange sum is: %ld\n", everything);
+    printf("The strange sum is: %lu\n", everything);
     return 0;
 }

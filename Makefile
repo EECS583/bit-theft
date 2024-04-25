@@ -5,7 +5,7 @@ DIS := llvm-dis
 DUMP := objdump
 CMAKE := cmake
 
-CFLAGS := -std=c17 -Wall -O1 -lm
+CFLAGS := -std=c17 -Wall -O1
 
 PLUGIN = build/PassPlugin.so
 TESTS = $(wildcard tests/*.c)

@@ -69,8 +69,6 @@ IntegerBitTheftPass::createTransformedFunction(Function &F) {
         FunctionType::get(F.getReturnType(), argumentTypes, F.isVarArg());
     auto *transformed =
         Function::Create(FTy, F.getLinkage(), "", F.getParent());
-    transformed->setLinkage(GlobalValue::InternalLinkage);
-    transformed->setCallingConv(CallingConv::Fast);
     transformed->setName(F.getName().str() + ".integer_bit_theft");
 
     auto *prefix = BasicBlock::Create(F.getContext(), "", transformed);
@@ -98,6 +96,7 @@ IntegerBitTheftPass::createTransformedFunction(Function &F) {
                       CloneFunctionChangeType::LocalChangesOnly, _,
                       ".integer_bit_theft");
     builder.CreateBr(dyn_cast<BasicBlock>(VMap[&(F.getEntryBlock())]));
+    transformed->setLinkage(GlobalValue::InternalLinkage);
     return std::make_pair(transformed, mappedArgNo);
 }
 
