@@ -10,7 +10,7 @@ typedef struct List {
     struct List *next;
 } List;
 
-static List *generate_random_list(size_t n) {
+List *generate_random_list(size_t n) {
     if (n == 0)
         return NULL;
     List *node = (List *)calloc(1, sizeof(List));
@@ -19,15 +19,15 @@ static List *generate_random_list(size_t n) {
     return node;
 }
 
-static void free_random_list(List *list) {
+void free_list(List *list) {
     if (list == NULL)
         return;
-    free_random_list(list->next);
+    free_list(list->next);
     free(list);
 }
 
-static size_t count_rising_edge(const List *list, size_t rising_edges,
-                                bool last_value) {
+size_t count_rising_edge(const List *list, size_t rising_edges,
+                         bool last_value) {
     return list ? count_rising_edge(list->next,
                                     rising_edges +
                                         ((!last_value && list->value) ? 1 : 0),
@@ -35,7 +35,16 @@ static size_t count_rising_edge(const List *list, size_t rising_edges,
                 : rising_edges;
 }
 
-int main(int argc, char *argv[]) {
+__attribute__((optnone)) size_t
+count_rising_edge_ref(const List *list, size_t rising_edges, bool last_value) {
+    return list ? count_rising_edge_ref(
+                      list->next,
+                      rising_edges + ((!last_value && list->value) ? 1 : 0),
+                      list->value)
+                : rising_edges;
+}
+
+int main() {
     srand((unsigned int)time(NULL));
     List first = {.value = true, .next = NULL};
     List second = {.value = false, .next = NULL};
@@ -49,8 +58,10 @@ int main(int argc, char *argv[]) {
     printf("Rising edges in the list: %ld\n", rising_edges);
     int n = rand() % 100;
     List *list = generate_random_list((size_t)(n < 0 ? -n : n));
+    assert(count_rising_edge(list, 0, true) ==
+           count_rising_edge_ref(list, 0, true));
     printf("Rising edges in random list: %ld\n",
            count_rising_edge(list, 0, true));
-    free_random_list(list);
+    free_list(list);
     return 0;
 }

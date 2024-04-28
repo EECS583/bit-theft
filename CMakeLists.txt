@@ -7,7 +7,7 @@ set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED True)
 
 set(CMAKE_CXX_COMPILER clang++)
-set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -22,4 +22,4 @@ add_definitions(${LLVM_DEFINITIONS_LIST})
 include_directories(${LLVM_INCLUDE_DIRS})
 
 include_directories(include)
-add_llvm_pass_plugin(PassPlugin src/BitTheftPass.cpp src/driver.cpp)
+add_llvm_pass_plugin(PassPlugin src/BitTheftPass.cpp src/IntegerBitTheftPass.cpp src/driver.cpp)

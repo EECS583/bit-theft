@@ -2,22 +2,36 @@ CC := clang
 CXX := clang++
 OPT := opt
 DIS := llvm-dis
+DUMP := objdump
+CMAKE := cmake
 
-PLUGIN = "build/PassPlugin.so"
+CFLAGS := -std=c17 -Wall -O1
 
-build:
-	$(MAKE) -C build
+PLUGIN = build/PassPlugin.so
+TESTS = $(wildcard tests/*.c)
 
-test: tests/count_rising_edge.steal.ll
+.PHONY: $(PLUGIN)
+$(PLUGIN):
+	$(CMAKE) --build build -j2
 
-tests/%.ll: tests/%.c
-	$(CC) -emit-llvm -S $< -O1 -o $@
+$(TESTS:%.c=%.bc): tests/%.bc: tests/%.c
+	$(CC) -c -emit-llvm ${CFLAGS} $< -o $@
 
-tests/%.steal.bc: tests/%.ll
+$(TESTS:%.c=%): tests/%: tests/%.bc
+	$(CC) ${CFLAGS} $< -o $@
+
+$(TESTS:%.c=%.bit_theft.bc): tests/%.bit_theft.bc: tests/%.bc $(PLUGIN)
 	$(OPT) -load-pass-plugin="${PLUGIN}" -passes='bit-theft' $< -o $@
 
-tests/%.steal.ll: tests/%.steal.bc
+$(TESTS:%.c=%.bit_theft): tests/%.bit_theft: tests/%.bit_theft.bc
+	$(CC) ${CFLAGS} $< -o $@
+
+%.ll: %.bc
 	$(DIS) $< -o $@
 
+%.lst: %
+	$(DUMP) -d $< > $@
+
+.PHONY: clean
 clean:
-	rm -f tests/*.bc tests/*.ll
+	find tests -type f -not -name '*.c' -delete
